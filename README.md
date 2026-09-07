@@ -26,13 +26,15 @@ The MVP is complete and verified against the live ASU Class Search:
 
 - **Popup settings** — cache TTL, plus the green and yellow thresholds on live sliders that preview the real badge styling. Changes restyle open Class Search tabs immediately via `chrome.storage.onChanged`. Stored settings are user-editable and survive upgrades, so every field is re-validated on read; the two thresholds are bounded by each other so the yellow band can never invert. Also shows the cached-professor count and a clear-cache button.
 
+- **Quality-vs-difficulty scatter** — `src/content/scatterWidget.ts` plots every rated professor teaching a course on rating against difficulty, with dot size reflecting how many reviews back each point and the corners captioned so the axes need no decoding. Point labels fall back from above to below a dot and are dropped rather than printed over a neighbour; the hover tooltip still names every point. Appears once a course has at least three rated professors, with course pills when a result set spans several.
+
 Only aggregate numbers are stored. No review text, reviewer data, or browsing activity is collected or transmitted.
 
 ## Verification
 
 | Command | What it proves |
 | --- | --- |
-| `npm test` | 90 unit tests across the scanner, matcher, RMP parser, cache, and badge renderer. |
+| `npm test` | 100 unit tests across the scanner, matcher, RMP parser, cache, and badge renderer. |
 | `npm run typecheck` | Strict TypeScript across all entry points. |
 | `npm run validate:chrome` | Loads the built extension in a disposable headless Chrome profile: the service worker starts, the popup renders without errors, a live RMP lookup succeeds, and a repeat lookup in ASU's `"Last, First"` format is served from cache without a second fetch, and the settings controls render. Set `VERDCT_SCREENSHOT=<path>` to capture the popup for design review. |
 | `npm run validate:asu` | Drives the live ASU Class Search and asserts every result row receives a badge that resolves out of its loading state, including a dynamically inserted row. |
@@ -41,14 +43,15 @@ Only aggregate numbers are stored. No review text, reviewer data, or browsing ac
 
 Set `CHROME_PATH` when Chrome is installed outside its default Windows location. `validate:asu` defaults to Fall 2026 MAT 243; set `ASU_TEST_URL` to target a different current result page.
 
-Latest `validate:asu` run: 17 of 17 rows badged, 0 unresolved, 1 best section highlighted, 0 page errors.
+Latest `validate:asu` run: 17 of 17 rows badged, 0 unresolved, 1 best section highlighted, 9 professors offered for comparison, 0 page errors.
 
 ## Known constraints
 
 - **Both upstreams are undocumented and unstable.** ASU's selectors live only in `domScanner.ts`; RMP's query and response parsing live only in `rmpClient.ts`. Either can be repaired without touching the rest of the codebase.
+- **The scatter opens from a floating launcher, not a course header.** The spec asked for a course header, but ASU's results are a flat list of sections with no per-course header element to attach to. The launcher is discoverable regardless of markup and still handles multi-course result sets.
 - **ASU's school ID on RMP is hardcoded** (`ASU_RMP_SCHOOL_ID`) rather than re-searched per lookup.
 - **Instructors not on RateMyProfessor render gray.** In the reference MAT 243 run, 3 of 17 rows had no confident match. This is deliberate: a low-confidence guess is worse than no answer.
 
 ## Not yet built
 
-The rest of Phase 2 (quality-vs-difficulty scatter, trend arrows, favorited professors) and Phase 3 (sentiment tags, seat alerts, alternate-section recommender)..
+The rest of Phase 2 (trend arrows, favorited professors) and Phase 3 (sentiment tags, seat alerts, alternate-section recommender)..

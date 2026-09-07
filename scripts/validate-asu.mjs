@@ -111,7 +111,11 @@ const BADGE_STATE_EXPRESSION = `(() => {
     };
   });
   const bestRows = [...document.querySelectorAll('[data-verdct-best="true"]')];
+  const scatterRoot = document.querySelector('[data-verdct-scatter]')?.shadowRoot;
+  const scatterLauncher = scatterRoot?.querySelector('.launcher');
   return {
+    scatterOffered: Boolean(scatterLauncher) && !scatterLauncher.hidden,
+    scatterLabel: scatterLauncher?.textContent ?? '',
     bestRowCount: bestRows.length,
     bestLabelled: bestRows.filter((row) => row.querySelector('[data-verdct-best-chip]')).length,
     bestProfessors: bestRows.map((row) => {
@@ -227,7 +231,16 @@ try {
   if (!finalState.bestRowCount) {
     throw new Error(
       `No best section was highlighted: ${JSON.stringify({
-        bestRowCount: finalState.bestRowCount,
+        scatterLabel: finalState.scatterLabel,
+    bestRowCount: finalState.bestRowCount,
+        ratedBadges: finalState.ratedBadges.length,
+      })}`,
+    );
+  }
+  if (!finalState.scatterOffered) {
+    throw new Error(
+      `The quality-vs-difficulty comparison was not offered: ${JSON.stringify({
+        scatterOffered: finalState.scatterOffered,
         ratedBadges: finalState.ratedBadges.length,
       })}`,
     );
@@ -266,6 +279,7 @@ try {
     badgeCount: finalState.badgeCount,
     unresolvedBadges: finalState.badgeCount - finalState.resolvedBadges.length,
     toneBreakdown,
+    scatterLabel: finalState.scatterLabel,
     bestRowCount: finalState.bestRowCount,
     bestProfessors: [...new Set(finalState.bestProfessors)],
     sampleBadges: finalState.ratedBadges.slice(0, 5),

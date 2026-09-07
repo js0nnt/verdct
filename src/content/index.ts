@@ -8,6 +8,7 @@ import type {
 import { configureBadges, isVerdctNode, upsertBadge, type BadgeState } from './badgeRenderer';
 import { evaluateBestSections, recordSection } from './bestSection';
 import { scanClassSections, type ScannedClassSection } from './domScanner';
+import { recordScatterPoint, refreshScatter } from './scatterWidget';
 
 const RESCAN_DELAY_MS = 100;
 
@@ -75,6 +76,8 @@ function renderSection(section: ScannedClassSection): void {
     upsertBadge(section, state);
     recordSection(section, state);
     evaluateBestSections();
+    if (state.status === 'ready') recordScatterPoint(section.courseId, state.rating);
+    refreshScatter();
   });
 }
 

@@ -28,6 +28,8 @@ export const VERDCT_BADGE_ATTRIBUTE = 'data-verdct-badge';
 export const VERDCT_POPOVER_ATTRIBUTE = 'data-verdct-popover-layer';
 export const VERDCT_BEST_ATTRIBUTE = 'data-verdct-best';
 export const VERDCT_BEST_CHIP_ATTRIBUTE = 'data-verdct-best-chip';
+export const VERDCT_SCATTER_ATTRIBUTE = 'data-verdct-scatter';
 
 export const VERDCT_INJECTED_SELECTOR =
-  `[${VERDCT_BADGE_ATTRIBUTE}], [${VERDCT_POPOVER_ATTRIBUTE}], [${VERDCT_BEST_CHIP_ATTRIBUTE}]`;
+  `[${VERDCT_BADGE_ATTRIBUTE}], [${VERDCT_POPOVER_ATTRIBUTE}], ` +
+  `[${VERDCT_BEST_CHIP_ATTRIBUTE}], [${VERDCT_SCATTER_ATTRIBUTE}]`;
