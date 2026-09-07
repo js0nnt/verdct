@@ -6,7 +6,7 @@ import {
 import { toggleFavorite } from '../shared/favorites';
 import { EMBEDDED_TOKENS, FLOATING_TOKENS } from './theme';
 import { DEFAULT_SETTINGS } from '../shared/settings';
-import type { ProfessorRating, VerdctSettings } from '../shared/types';
+import type { ProfessorRating, ThemePreference, VerdctSettings } from '../shared/types';
 import type { ScannedClassSection } from './domScanner';
 
 export { VERDCT_BADGE_ATTRIBUTE, VERDCT_POPOVER_ATTRIBUTE };
@@ -34,6 +34,14 @@ const badgeHandles = new WeakMap<HTMLElement, BadgeHandle>();
 const renderedBadges = new Set<HTMLElement>();
 let settings: VerdctSettings = DEFAULT_SETTINGS;
 let favoriteNames = new Set<string>();
+let themePreference: ThemePreference = 'auto';
+
+/** Applies the user's explicit light/dark choice to Verdct's floating surfaces. */
+export function configureTheme(theme: ThemePreference): void {
+  themePreference = theme;
+  const host = document.querySelector(`[${VERDCT_POPOVER_ATTRIBUTE}]`);
+  host?.setAttribute('data-theme', theme);
+}
 
 /** Keeps the popover's star in step with storage. */
 export function configureFavorites(names: Set<string>): void {
@@ -58,7 +66,7 @@ const BADGE_STYLES = `
     margin-left: 6px;
     padding: 1px 7px;
     min-height: 18px;
-    border: 1px solid var(--v-border);
+    border: 1px solid var(--v-border-strong);
     border-radius: 6px;
     background: var(--v-surface);
     color: var(--v-text);
@@ -74,7 +82,7 @@ const BADGE_STYLES = `
     transition: border-color 120ms ease, box-shadow 120ms ease;
   }
 
-  button:hover { border-color: var(--v-border-strong); box-shadow: 0 1px 4px var(--v-shadow); }
+  button:hover { border-color: var(--v-text-muted); box-shadow: 0 1px 4px var(--v-shadow); }
   button:focus-visible { outline: 2px solid var(--v-text); outline-offset: 2px; }
 
   /* The only colour on the badge, small enough to read as a signal. */
@@ -91,6 +99,7 @@ const BADGE_STYLES = `
   button.unknown {
     background: transparent;
     border-style: dashed;
+    border-color: var(--v-border-strong);
     color: var(--v-text-faint);
     font-weight: 500;
   }
@@ -278,6 +287,7 @@ function popover(): PopoverParts {
 
   const host = document.createElement('div');
   host.setAttribute(VERDCT_POPOVER_ATTRIBUTE, '');
+  host.setAttribute('data-theme', themePreference);
   const shadow = host.attachShadow({ mode: 'open' });
 
   const style = document.createElement('style');

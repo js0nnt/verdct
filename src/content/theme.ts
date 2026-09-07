@@ -51,7 +51,9 @@ export const EMBEDDED_TOKENS = `:host { ${LIGHT_TOKENS} }`;
  */
 export const FLOATING_TOKENS = `
   :host { ${LIGHT_TOKENS} }
+  /* 'auto' defers to the OS; an explicit choice from settings overrides it. */
   @media (prefers-color-scheme: dark) {
-    :host { ${DARK_TOKENS} }
+    :host([data-theme="auto"]) { ${DARK_TOKENS} }
   }
+  :host([data-theme="dark"]) { ${DARK_TOKENS} }
 `;

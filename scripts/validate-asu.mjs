@@ -111,11 +111,7 @@ const BADGE_STATE_EXPRESSION = `(() => {
     };
   });
   const bestRows = [...document.querySelectorAll('[data-verdct-best="true"]')];
-  const scatterRoot = document.querySelector('[data-verdct-scatter]')?.shadowRoot;
-  const scatterLauncher = scatterRoot?.querySelector('.launcher');
   return {
-    scatterOffered: Boolean(scatterLauncher) && !scatterLauncher.hidden,
-    scatterLabel: scatterLauncher?.textContent ?? '',
     bestRowCount: bestRows.length,
     bestLabelled: bestRows.filter((row) => row.querySelector('[data-verdct-best-chip]')).length,
     bestProfessors: bestRows.map((row) => {
@@ -233,22 +229,61 @@ try {
 
   const finalState = await readBadgeState(connection, sessionId);
 
+  // The chart now lives in the popup, so the page's job is to report what it
+  // found. Verify from an extension page that the per-tab record was written
+  // and the toolbar badge — the only gesture-free attention signal Chrome
+  // allows — reflects it.
+  const { extensions } = await connection.send('Extensions.getExtensions');
+  const verdctId = extensions.find((extension) => extension.name === 'Verdct')?.id;
+  const { targetId: popupTarget } = await connection.send('Target.createTarget', {
+    url: `chrome-extension://${verdctId}/popup.html`,
+  });
+  const { sessionId: popupSession } = await connection.send('Target.attachToTarget', {
+    targetId: popupTarget,
+    flatten: true,
+  });
+  await connection.send('Runtime.enable', {}, popupSession);
+
+  let reported;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const evaluation = await connection.send('Runtime.evaluate', {
+      expression: `(async () => {
+        const all = await chrome.storage.session.get(null);
+        const entry = Object.entries(all).find(([key]) => key.startsWith('verdct:tab:'));
+        if (!entry) return { found: false };
+        const tabId = Number(entry[0].slice('verdct:tab:'.length));
+        const courses = entry[1]?.courses ?? {};
+        return {
+          found: true,
+          courses: Object.fromEntries(
+            Object.entries(courses).map(([id, points]) => [id, points.length]),
+          ),
+          badgeText: await chrome.action.getBadgeText({ tabId }),
+        };
+      })()`,
+      awaitPromise: true,
+      returnByValue: true,
+    }, popupSession);
+    reported = evaluation.result?.value;
+    if (reported?.found && reported.badgeText) break;
+    await delay(250);
+  }
+
+  if (!reported?.found || !reported.badgeText) {
+    throw new Error(
+      `The page did not report its courses to the background: ${JSON.stringify(reported)}`,
+    );
+  }
+
   // The reference page lists many distinct professors, so exactly one course
   // group should win and every winning row should carry its explanatory chip.
   if (!finalState.bestRowCount) {
     throw new Error(
       `No best section was highlighted: ${JSON.stringify({
         trendArrows: finalState.ratedBadges.filter((badge) => /[▲▼]/.test(badge.text)).length,
-    scatterLabel: finalState.scatterLabel,
+    reportedCourses: reported.courses,
+    toolbarBadge: reported.badgeText,
     bestRowCount: finalState.bestRowCount,
-        ratedBadges: finalState.ratedBadges.length,
-      })}`,
-    );
-  }
-  if (!finalState.scatterOffered) {
-    throw new Error(
-      `The quality-vs-difficulty comparison was not offered: ${JSON.stringify({
-        scatterOffered: finalState.scatterOffered,
         ratedBadges: finalState.ratedBadges.length,
       })}`,
     );
@@ -288,7 +323,8 @@ try {
     unresolvedBadges: finalState.badgeCount - finalState.resolvedBadges.length,
     toneBreakdown,
     trendArrows: finalState.ratedBadges.filter((badge) => /[▲▼]/.test(badge.text)).length,
-    scatterLabel: finalState.scatterLabel,
+    reportedCourses: reported.courses,
+    toolbarBadge: reported.badgeText,
     bestRowCount: finalState.bestRowCount,
     bestProfessors: [...new Set(finalState.bestProfessors)],
     sampleBadges: finalState.ratedBadges.slice(0, 5),

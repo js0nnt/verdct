@@ -6,9 +6,10 @@ import {
   SETTINGS_STORAGE_KEY,
 } from './constants';
 import { defaultStorageArea, type StorageAreaLike } from './storage';
-import type { VerdctSettings } from './types';
+import type { ThemePreference, VerdctSettings } from './types';
 
 export const DEFAULT_SETTINGS: VerdctSettings = {
+  theme: 'auto',
   cacheTtlMs: DEFAULT_CACHE_TTL_MS,
   noMatchTtlMs: DEFAULT_NO_MATCH_TTL_MS,
   goodRatingThreshold: DEFAULT_GOOD_RATING_THRESHOLD,
@@ -40,7 +41,13 @@ export function coerceSettings(value: unknown): VerdctSettings {
   const good = boundedNumber(raw.goodRatingThreshold, DEFAULT_SETTINGS.goodRatingThreshold, 0, 5);
   const fair = boundedNumber(raw.fairRatingThreshold, DEFAULT_SETTINGS.fairRatingThreshold, 0, 5);
 
+  const theme: ThemePreference =
+    raw.theme === 'light' || raw.theme === 'dark' || raw.theme === 'auto'
+      ? raw.theme
+      : DEFAULT_SETTINGS.theme;
+
   return {
+    theme,
     cacheTtlMs: boundedNumber(raw.cacheTtlMs, DEFAULT_SETTINGS.cacheTtlMs, ONE_HOUR_MS, ONE_YEAR_MS),
     noMatchTtlMs: boundedNumber(
       raw.noMatchTtlMs,

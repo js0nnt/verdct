@@ -3,8 +3,12 @@
   "name": "Verdct",
   "description": "See professor ratings while browsing ASU Class Search.",
   "version": "0.1.0",
-  "permissions": ["storage"],
-  "host_permissions": ["https://www.ratemyprofessors.com/*"],
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.ratemyprofessors.com/*"
+  ],
   "background": {
     "service_worker": "src/background/worker.ts",
     "type": "module"
@@ -15,8 +19,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://catalog.apps.asu.edu/catalog/classes/*"],
-      "js": ["src/content/contentScript.ts"],
+      "matches": [
+        "https://catalog.apps.asu.edu/catalog/classes/*"
+      ],
+      "js": [
+        "src/content/contentScript.ts"
+      ],
       "run_at": "document_idle"
     }
   ]

@@ -1,8 +1,10 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./popup.html', './src/popup/**/*.{ts,tsx}'],
-  // 'media' (the default) keys dark: variants off prefers-color-scheme, which
-  // is what the popup follows.
+  // Selector-based rather than 'media': the popup resolves the user's
+  // light/dark/auto preference itself and stamps data-theme on <html>, so an
+  // explicit choice can override the OS setting.
+  darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {

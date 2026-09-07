@@ -1,52 +1,63 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { readCacheStats } from '../background/cache';
-import type { CacheStats } from '../shared/types';
-import { Favorites } from './Favorites';
+import { DEFAULT_SETTINGS, readSettings } from '../shared/settings';
+import type { VerdctSettings } from '../shared/types';
+import { Home } from './Home';
 import { Settings } from './Settings';
+import { useTheme } from './useTheme';
 
-function formatAge(fetchedAt: number | null): string {
-  if (fetchedAt === null) return 'nothing cached yet';
-  const days = Math.floor((Date.now() - fetchedAt) / (24 * 60 * 60 * 1_000));
-  if (days <= 0) return 'all cached today';
-  return `oldest entry ${days} day${days === 1 ? '' : 's'} old`;
-}
+type Tab = 'home' | 'settings';
+
+const TABS: Array<{ id: Tab; label: string }> = [
+  { id: 'home', label: 'Overview' },
+  { id: 'settings', label: 'Settings' },
+];
 
 export function App() {
-  const [stats, setStats] = useState<CacheStats | null>(null);
+  const [tab, setTab] = useState<Tab>('home');
+  const [settings, setSettings] = useState<VerdctSettings>(DEFAULT_SETTINGS);
 
-  const refreshStats = useCallback(() => {
-    void readCacheStats().then(setStats);
+  useEffect(() => {
+    void readSettings().then(setSettings);
   }, []);
 
-  useEffect(refreshStats, [refreshStats]);
+  useTheme(settings.theme);
 
   return (
-    <main className="w-80 bg-surface p-5 text-ink dark:bg-surface-dark dark:text-inkdark">
-      <header className="flex items-center gap-2.5">
+    <main className="flex w-80 flex-col bg-surface text-ink dark:bg-surface-dark dark:text-inkdark">
+      <header className="flex items-center gap-2.5 px-5 pt-5">
         <span className="verdct-mark h-5 w-5 rounded-md" aria-hidden="true" />
         <p className="text-[13px] font-semibold tracking-tight">Verdct</p>
       </header>
 
-      <h1 className="mt-3 text-lg font-semibold leading-snug tracking-tight">
-        See the verdict before you register.
-      </h1>
-      <p className="mt-2 text-[13px] leading-5 text-ink-muted dark:text-inkdark-muted">
-        Open ASU Class Search and ratings appear next to each instructor. Hover a badge for
-        difficulty, would-take-again, and rating count.
-      </p>
+      <nav
+        className="mt-4 flex gap-1 border-b border-line px-3 dark:border-line-dark"
+        aria-label="Sections"
+      >
+        {TABS.map((entry) => (
+          <button
+            key={entry.id}
+            type="button"
+            onClick={() => setTab(entry.id)}
+            aria-current={tab === entry.id ? 'page' : undefined}
+            className={`-mb-px border-b-2 px-2.5 py-2 text-xs font-semibold transition-colors ${
+              tab === entry.id
+                ? 'border-ink text-ink dark:border-inkdark dark:text-inkdark'
+                : 'border-transparent text-ink-faint hover:text-ink-muted dark:text-inkdark-faint dark:hover:text-inkdark-muted'
+            }`}
+          >
+            {entry.label}
+          </button>
+        ))}
+      </nav>
 
-      <dl className="mt-4 flex items-baseline justify-between border-t border-line pt-3 text-sm dark:border-line-dark">
-        <dt className="text-ink-muted dark:text-inkdark-muted">Cached professors</dt>
-        <dd className="font-semibold tabular-nums">{stats ? stats.entryCount : '—'}</dd>
-      </dl>
-      <p className="mt-1 text-xs text-ink-faint dark:text-inkdark-faint">
-        {stats ? formatAge(stats.oldestFetchedAt) : 'Reading cache…'}
-      </p>
-
-      <Favorites />
-
-      <Settings onCacheCleared={refreshStats} />
+      <div className="px-5 pb-5 pt-4">
+        {tab === 'home' ? (
+          <Home />
+        ) : (
+          <Settings settings={settings} onSettingsChange={setSettings} />
+        )}
+      </div>
     </main>
   );
 }

@@ -20,7 +20,6 @@ const memory: Record<string, unknown> = {};
 
 import { upsertBadge, type BadgeState } from '../src/content/badgeRenderer';
 import { evaluateBestSections, recordSection } from '../src/content/bestSection';
-import { recordScatterPoint, refreshScatter } from '../src/content/scatterWidget';
 import type { ScannedClassSection } from '../src/content/domScanner';
 import type { ProfessorRating } from '../src/shared/types';
 
@@ -133,10 +132,6 @@ for (const scenario of scenarios) {
   };
   upsertBadge(section, scenario.state);
   recordSection(section, scenario.state);
-  if (scenario.state.status === 'ready') {
-    recordScatterPoint(section.courseId, scenario.state.rating);
-  }
 }
 
 evaluateBestSections();
-refreshScatter();

@@ -141,29 +141,77 @@ try {
     }
 
     popup = evaluation.result?.value;
-    if (popup?.readyState === 'complete' && popup.text.includes('See the verdict before you register.')) {
+    if (popup?.readyState === 'complete' && /quality vs difficulty/i.test(popup.text)) {
       break;
     }
 
     await delay(100);
   }
 
-  if (!popup?.text.includes('See the verdict before you register.')) {
+  // The Overview tab is the default, and it leads with the comparison chart.
+  if (!/quality vs difficulty/i.test(popup?.text ?? '') || !/settings/i.test(popup.text)) {
     throw new Error(`The Verdct popup did not render as expected: ${JSON.stringify(popup)}`);
   }
 
+  // Settings now live behind their own tab, so the controls only exist once it
+  // is opened.
   const controlsEvaluation = await connection.send('Runtime.evaluate', {
-    expression: `(() => ({
-      ttlOptions: document.querySelector('#verdct-ttl')?.options?.length ?? 0,
-      sliders: document.querySelectorAll('input[type="range"]').length,
-      hasClearButton: [...document.querySelectorAll('button')].some((b) => /Clear cached/i.test(b.textContent)),
-    }))()`,
+    expression: `(async () => {
+      const tab = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Settings');
+      if (!tab) return { openedSettings: false };
+      tab.click();
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      const themeButtons = [...document.querySelectorAll('[role="group"][aria-label="Theme"] button')]
+        .map((b) => b.textContent.trim());
+      return {
+        openedSettings: true,
+        themeChoices: themeButtons,
+        activeTheme: document.documentElement.getAttribute('data-theme'),
+        ttlOptions: document.querySelector('#verdct-ttl')?.options?.length ?? 0,
+        sliders: document.querySelectorAll('input[type="range"]').length,
+        hasClearButton: [...document.querySelectorAll('button')].some((b) => /Clear cached/i.test(b.textContent)),
+      };
+    })()`,
+    awaitPromise: true,
     returnByValue: true,
   }, sessionId);
   const controls = controlsEvaluation.result?.value;
 
-  if (controls?.ttlOptions !== 5 || controls?.sliders !== 2 || !controls?.hasClearButton) {
+  if (
+    !controls?.openedSettings ||
+    controls.ttlOptions !== 5 ||
+    controls.sliders !== 2 ||
+    !controls.hasClearButton
+  ) {
     throw new Error(`The popup settings controls did not render: ${JSON.stringify(controls)}`);
+  }
+
+  if (String(controls.themeChoices) !== 'Light,Dark,Auto') {
+    throw new Error(`The theme toggle is missing an option: ${JSON.stringify(controls.themeChoices)}`);
+  }
+
+  // An explicit choice must beat the OS setting.
+  const themeEvaluation = await connection.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const pick = (label) => [...document.querySelectorAll('[role="group"][aria-label="Theme"] button')]
+        .find((b) => b.textContent.trim() === label);
+      pick('Dark').click();
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      const dark = document.documentElement.getAttribute('data-theme');
+      pick('Light').click();
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      const light = document.documentElement.getAttribute('data-theme');
+      pick('Auto').click();
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      return { dark, light, auto: document.documentElement.getAttribute('data-theme') };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  }, sessionId);
+  const themes = themeEvaluation.result?.value;
+
+  if (themes?.dark !== 'dark' || themes?.light !== 'light') {
+    throw new Error(`The theme override did not apply: ${JSON.stringify(themes)}`);
   }
 
   // Optional visual capture for design review: VERDCT_SCREENSHOT=path npm run validate:chrome
@@ -308,6 +356,80 @@ try {
     );
   }
 
+  // Seed this tab's course data so the Overview chart has something to draw.
+  // The popup resolves data by active tab id, which in a plain tab is itself.
+  await connection.send('Page.reload', {}, sessionId);
+  await delay(400);
+
+  const chartEvaluation = await connection.send('Runtime.evaluate', {
+    expression: `(async () => {
+      const tab = await chrome.tabs.getCurrent();
+      await chrome.storage.session.set({
+        ['verdct:tab:' + tab.id]: {
+          courses: {
+            'MAT 243': [
+              { name: 'Jay Barraza', rating: 4.6, difficulty: 2.4, numRatings: 128 },
+              { name: 'Phong Chau', rating: 4.4, difficulty: 4.1, numRatings: 63 },
+              { name: 'Chandrani Banerjee', rating: 3.6, difficulty: 3.4, numRatings: 44 },
+              { name: 'Frank Arthur', rating: 3.5, difficulty: 3.5, numRatings: 150 },
+              { name: 'Sukitha Adappa', rating: 2.9, difficulty: 3.9, numRatings: 22 },
+              { name: 'Adam Leighton', rating: 2.1, difficulty: 4.4, numRatings: 37 },
+            ],
+          },
+          updatedAt: Date.now(),
+        },
+      });
+      return true;
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  }, sessionId);
+
+  if (!chartEvaluation.result?.value) {
+    throw new Error('Could not seed course data for the chart check.');
+  }
+
+  let chart;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const evaluation = await connection.send('Runtime.evaluate', {
+      expression: `(() => ({
+        dots: document.querySelectorAll('svg circle').length,
+        labels: document.querySelectorAll('svg text').length,
+      }))()`,
+      returnByValue: true,
+    }, sessionId);
+    chart = evaluation.result?.value;
+    if (chart?.dots > 0) break;
+    await delay(100);
+  }
+
+  if (chart?.dots !== 6) {
+    const diag = await connection.send('Runtime.evaluate', {
+      expression: `(async () => {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        const current = await chrome.tabs.getCurrent();
+        const all = await chrome.storage.session.get(null);
+        const reply = await new Promise((resolve) => {
+          chrome.runtime.sendMessage(
+            { type: 'verdct:get-course-data', tabId: tabs[0]?.id },
+            (r) => resolve({ r, err: chrome.runtime.lastError?.message ?? null }),
+          );
+        });
+        return {
+          queriedTabId: tabs[0]?.id ?? null,
+          currentTabId: current?.id ?? null,
+          sessionKeys: Object.keys(all),
+          reply,
+        };
+      })()`,
+      awaitPromise: true,
+      returnByValue: true,
+    }, sessionId);
+    throw new Error(
+      `The popup chart did not plot every professor: ${JSON.stringify(chart)} :: ${JSON.stringify(diag.result?.value)}`,
+    );
+  }
+
   // Capture both themes, since the popup follows prefers-color-scheme.
   if (screenshotPath) {
     for (const scheme of ['light', 'dark']) {
@@ -357,6 +479,8 @@ try {
       trend: rating.trend,
     },
     settingsControls: controls,
+    themeOverride: themes,
+    chart,
     screenshot: screenshotPath ?? null,
     favoriteRow,
     cacheServedRepeatLookup: true,

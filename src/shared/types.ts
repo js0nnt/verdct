@@ -1,3 +1,7 @@
+import type { ScatterPoint } from './scatterGeometry';
+
+export type { ScatterPoint };
+
 /** Direction of a professor's recent reviews against their older ones. */
 export type RatingTrend = 'rising' | 'falling' | 'steady';
 
@@ -23,7 +27,11 @@ export type LookupProfessorResponse =
   | { ok: true; rating: ProfessorRating }
   | { ok: false; error: string };
 
+export type ThemePreference = 'light' | 'dark' | 'auto';
+
 export interface VerdctSettings {
+  /** 'auto' follows the OS via prefers-color-scheme. */
+  theme: ThemePreference;
   /** TTL applied to ratings that matched a professor on RateMyProfessor. */
   cacheTtlMs: number;
   /** TTL applied to "no match found" results. */
@@ -52,4 +60,20 @@ export interface FavoriteProfessor {
   normalizedName: string;
   displayName: string;
   addedAt: number;
+}
+
+/** What one tab's Class Search results contributed, keyed by course. */
+export interface TabCourseData {
+  courses: Record<string, ScatterPoint[]>;
+  updatedAt: number;
+}
+
+export interface ReportCourseDataMessage {
+  type: 'verdct:report-course-data';
+  courses: Record<string, ScatterPoint[]>;
+}
+
+export interface GetCourseDataMessage {
+  type: 'verdct:get-course-data';
+  tabId: number;
 }

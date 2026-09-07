@@ -7,6 +7,14 @@ export const DEFAULT_NO_MATCH_TTL_MS = 24 * 60 * 60 * 1_000;
 export const CACHE_ENTRY_LIMIT = 500;
 export const BACKGROUND_HEALTH_CHECK = 'verdct:background-health-check';
 export const LOOKUP_PROFESSOR_MESSAGE = 'verdct:lookup-professor';
+export const REPORT_COURSE_DATA_MESSAGE = 'verdct:report-course-data';
+export const GET_COURSE_DATA_MESSAGE = 'verdct:get-course-data';
+
+/** Per-tab scratch space, cleared when the browser session ends. */
+export const TAB_DATA_KEY_PREFIX = 'verdct:tab:';
+
+/** Below this, the badges already make the comparison and a chart adds nothing. */
+export const MIN_POINTS_TO_COMPARE = 3;
 export const RMP_GRAPHQL_ENDPOINT = 'https://www.ratemyprofessors.com/graphql';
 export const ASU_RMP_SCHOOL_ID = 'U2Nob29sLTE1NzIz';
 export const MINIMUM_RMP_REQUEST_INTERVAL_MS = 750;
@@ -32,8 +40,6 @@ export const VERDCT_BADGE_ATTRIBUTE = 'data-verdct-badge';
 export const VERDCT_POPOVER_ATTRIBUTE = 'data-verdct-popover-layer';
 export const VERDCT_BEST_ATTRIBUTE = 'data-verdct-best';
 export const VERDCT_BEST_CHIP_ATTRIBUTE = 'data-verdct-best-chip';
-export const VERDCT_SCATTER_ATTRIBUTE = 'data-verdct-scatter';
 
 export const VERDCT_INJECTED_SELECTOR =
-  `[${VERDCT_BADGE_ATTRIBUTE}], [${VERDCT_POPOVER_ATTRIBUTE}], ` +
-  `[${VERDCT_BEST_CHIP_ATTRIBUTE}], [${VERDCT_SCATTER_ATTRIBUTE}]`;
+  `[${VERDCT_BADGE_ATTRIBUTE}], [${VERDCT_POPOVER_ATTRIBUTE}], [${VERDCT_BEST_CHIP_ATTRIBUTE}]`;

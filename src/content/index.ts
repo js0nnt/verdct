@@ -13,13 +13,14 @@ import type {
 import {
   configureBadges,
   configureFavorites,
+  configureTheme,
   isVerdctNode,
   upsertBadge,
   type BadgeState,
 } from './badgeRenderer';
 import { evaluateBestSections, recordSection } from './bestSection';
 import { scanClassSections, type ScannedClassSection } from './domScanner';
-import { recordScatterPoint, refreshScatter } from './scatterWidget';
+import { recordCoursePoint, scheduleCourseReport } from './courseReporter';
 
 const RESCAN_DELAY_MS = 100;
 
@@ -87,8 +88,8 @@ function renderSection(section: ScannedClassSection): void {
     upsertBadge(section, state);
     recordSection(section, state);
     evaluateBestSections();
-    if (state.status === 'ready') recordScatterPoint(section.courseId, state.rating);
-    refreshScatter();
+    if (state.status === 'ready') recordCoursePoint(section.courseId, state.rating);
+    scheduleCourseReport();
   });
 }
 
@@ -136,7 +137,10 @@ observer.observe(document.documentElement, {
   characterData: true,
 });
 
-void readSettings().then(configureBadges);
+void readSettings().then((settings) => {
+  configureBadges(settings);
+  configureTheme(settings.theme);
+});
 void readFavorites().then((favorites) => {
   configureFavorites(new Set(favorites.map((favorite) => favorite.normalizedName)));
 });
@@ -146,7 +150,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
 
   if (changes[SETTINGS_STORAGE_KEY]) {
-    configureBadges(coerceSettings(changes[SETTINGS_STORAGE_KEY].newValue));
+    const settings = coerceSettings(changes[SETTINGS_STORAGE_KEY].newValue);
+    configureBadges(settings);
+    configureTheme(settings.theme);
   }
 
   // Favoriting in the popup, or in another tab, is reflected here too.

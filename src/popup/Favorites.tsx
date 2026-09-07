@@ -40,7 +40,7 @@ export function Favorites() {
   }
 
   return (
-    <section className="mt-4 border-t border-line pt-3 dark:border-line-dark">
+    <section className="mt-5 border-t border-line pt-4 dark:border-line-dark">
       <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-faint dark:text-inkdark-faint">
         Favorites
       </h2>

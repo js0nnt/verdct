@@ -1,9 +1,22 @@
 import { useEffect, useState } from 'react';
 
-import { clearRatingCache } from '../background/cache';
-import { DEFAULT_SETTINGS, readSettings, writeSettings } from '../shared/settings';
-import type { VerdctSettings } from '../shared/types';
+import { clearRatingCache, readCacheStats } from '../background/cache';
+import { writeSettings } from '../shared/settings';
+import type { CacheStats, ThemePreference, VerdctSettings } from '../shared/types';
 import { ToneBadge } from './ToneBadge';
+
+const THEME_CHOICES: Array<{ id: ThemePreference; label: string }> = [
+  { id: 'light', label: 'Light' },
+  { id: 'dark', label: 'Dark' },
+  { id: 'auto', label: 'Auto' },
+];
+
+function formatAge(fetchedAt: number | null): string {
+  if (fetchedAt === null) return 'nothing cached yet';
+  const days = Math.floor((Date.now() - fetchedAt) / (24 * 60 * 60 * 1_000));
+  if (days <= 0) return 'all cached today';
+  return `oldest entry ${days} day${days === 1 ? '' : 's'} old`;
+}
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
 
@@ -45,31 +58,64 @@ function ThresholdRow({ label, tone, value, min, max, onChange }: ThresholdRowPr
   );
 }
 
-export function Settings({ onCacheCleared }: { onCacheCleared: () => void }) {
-  const [settings, setSettings] = useState<VerdctSettings>(DEFAULT_SETTINGS);
+interface SettingsProps {
+  settings: VerdctSettings;
+  onSettingsChange: (settings: VerdctSettings) => void;
+}
+
+export function Settings({ settings, onSettingsChange }: SettingsProps) {
   const [clearing, setClearing] = useState(false);
+  const [stats, setStats] = useState<CacheStats | null>(null);
 
   useEffect(() => {
-    void readSettings().then(setSettings);
+    void readCacheStats().then(setStats);
   }, []);
 
-  /** Optimistic: the slider tracks the pointer, storage catches up behind it. */
+  /** Optimistic: the control tracks the pointer, storage catches up behind it. */
   function update(patch: Partial<VerdctSettings>): void {
-    setSettings((current) => ({ ...current, ...patch }));
-    void writeSettings(patch).then(setSettings);
+    onSettingsChange({ ...settings, ...patch });
+    void writeSettings(patch).then(onSettingsChange);
   }
 
   async function handleClear(): Promise<void> {
     setClearing(true);
     await clearRatingCache();
-    onCacheCleared();
+    setStats(await readCacheStats());
     setClearing(false);
   }
 
   return (
-    <section className="mt-4 border-t border-line pt-3 dark:border-line-dark">
+    <section>
       <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-faint dark:text-inkdark-faint">
-        Settings
+        Appearance
+      </h2>
+      <div
+        role="group"
+        aria-label="Theme"
+        className="mt-2 grid grid-cols-3 gap-1 rounded-lg border border-line p-1 dark:border-line-dark"
+      >
+        {THEME_CHOICES.map((choice) => (
+          <button
+            key={choice.id}
+            type="button"
+            aria-pressed={settings.theme === choice.id}
+            onClick={() => update({ theme: choice.id })}
+            className={`rounded-md px-2 py-1 text-xs font-semibold transition-colors ${
+              settings.theme === choice.id
+                ? 'bg-surface-sunken text-ink dark:bg-surface-darksunken dark:text-inkdark'
+                : 'text-ink-faint hover:text-ink-muted dark:text-inkdark-faint dark:hover:text-inkdark-muted'
+            }`}
+          >
+            {choice.label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1 text-[11px] leading-4 text-ink-faint dark:text-inkdark-faint">
+        Auto follows your system. Badges on Class Search always stay light, since ASU's page is.
+      </p>
+
+      <h2 className="mt-5 border-t border-line pt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-faint dark:border-line-dark dark:text-inkdark-faint">
+        Ratings
       </h2>
 
       <div className="mt-3">
@@ -116,11 +162,19 @@ export function Settings({ onCacheCleared }: { onCacheCleared: () => void }) {
         immediately.
       </p>
 
+      <dl className="mt-5 flex items-baseline justify-between border-t border-line pt-3 text-sm dark:border-line-dark">
+        <dt className="text-ink-muted dark:text-inkdark-muted">Cached professors</dt>
+        <dd className="font-semibold tabular-nums">{stats ? stats.entryCount : '—'}</dd>
+      </dl>
+      <p className="mt-1 text-[11px] text-ink-faint dark:text-inkdark-faint">
+        {stats ? formatAge(stats.oldestFetchedAt) : 'Reading cache…'}
+      </p>
+
       <button
         type="button"
         onClick={() => void handleClear()}
         disabled={clearing}
-        className="mt-4 w-full rounded-md border border-line px-2 py-1.5 text-xs font-semibold text-ink-muted hover:border-line-strong hover:text-ink disabled:opacity-50 dark:border-line-dark dark:text-inkdark-muted dark:hover:border-line-darkstrong dark:hover:text-inkdark"
+        className="mt-3 w-full rounded-md border border-line px-2 py-1.5 text-xs font-semibold text-ink-muted hover:border-line-strong hover:text-ink disabled:opacity-50 dark:border-line-dark dark:text-inkdark-muted dark:hover:border-line-darkstrong dark:hover:text-inkdark"
       >
         {clearing ? 'Clearing…' : 'Clear cached ratings'}
       </button>

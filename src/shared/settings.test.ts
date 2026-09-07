@@ -35,6 +35,7 @@ describe('coerceSettings', () => {
 
   it('keeps a fully valid record', () => {
     const valid = {
+      theme: 'dark' as const,
       cacheTtlMs: 3 * DAY_MS,
       noMatchTtlMs: 2 * DAY_MS,
       goodRatingThreshold: 4.2,
@@ -61,6 +62,22 @@ describe('coerceSettings', () => {
     expect(coerceSettings({ goodRatingThreshold: value }).goodRatingThreshold).toBe(
       DEFAULT_SETTINGS.goodRatingThreshold,
     );
+  });
+
+  it.each([
+    ['light', 'light'],
+    ['dark', 'dark'],
+    ['auto', 'auto'],
+  ])('keeps the valid theme %s', (theme, expected) => {
+    expect(coerceSettings({ theme }).theme).toBe(expected);
+  });
+
+  it.each([
+    ['an unknown value', 'sepia'],
+    ['a number', 3],
+    ['null', null],
+  ])('falls back to auto for %s', (_label, theme) => {
+    expect(coerceSettings({ theme }).theme).toBe('auto');
   });
 
   it('refuses an inverted band where yellow would outrank green', () => {
