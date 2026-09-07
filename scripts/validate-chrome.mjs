@@ -308,12 +308,22 @@ try {
     );
   }
 
+  // Capture both themes, since the popup follows prefers-color-scheme.
   if (screenshotPath) {
-    const populated = await connection.send('Page.captureScreenshot', {
-      format: 'png',
-      captureBeyondViewport: true,
-    }, sessionId);
-    await writeFile(screenshotPath, Buffer.from(populated.data, 'base64'));
+    for (const scheme of ['light', 'dark']) {
+      await connection.send('Emulation.setEmulatedMedia', {
+        features: [{ name: 'prefers-color-scheme', value: scheme }],
+      }, sessionId);
+      await delay(200);
+      const shot = await connection.send('Page.captureScreenshot', {
+        format: 'png',
+        captureBeyondViewport: true,
+      }, sessionId);
+      await writeFile(
+        screenshotPath.replace(/\.png$/, `.${scheme}.png`),
+        Buffer.from(shot.data, 'base64'),
+      );
+    }
   }
 
   await delay(100);

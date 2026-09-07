@@ -4,6 +4,7 @@ import {
   VERDCT_POPOVER_ATTRIBUTE,
 } from '../shared/constants';
 import { toggleFavorite } from '../shared/favorites';
+import { EMBEDDED_TOKENS, FLOATING_TOKENS } from './theme';
 import { DEFAULT_SETTINGS } from '../shared/settings';
 import type { ProfessorRating, VerdctSettings } from '../shared/types';
 import type { ScannedClassSection } from './domScanner';
@@ -46,66 +47,71 @@ export function configureFavorites(names: Set<string>): void {
  */
 const BADGE_STYLES = `
   :host { all: initial; }
+  ${EMBEDDED_TOKENS}
 
   button {
     all: unset;
     box-sizing: border-box;
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    gap: 5px;
     margin-left: 6px;
     padding: 1px 7px;
     min-height: 18px;
-    min-width: 30px;
-    justify-content: center;
-    border: 1px solid transparent;
+    border: 1px solid var(--v-border);
     border-radius: 6px;
+    background: var(--v-surface);
+    color: var(--v-text);
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    font-size: 12px;
-    font-weight: 700;
+    font-size: 11.5px;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
     line-height: 16px;
     white-space: nowrap;
     vertical-align: middle;
     cursor: help;
     animation: verdct-badge-in 160ms ease-out;
-    transition: transform 120ms ease, box-shadow 120ms ease;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
   }
 
-  button:hover { transform: translateY(-1px); box-shadow: 0 2px 6px rgba(15, 23, 42, 0.14); }
-  button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+  button:hover { border-color: var(--v-border-strong); box-shadow: 0 1px 4px var(--v-shadow); }
+  button:focus-visible { outline: 2px solid var(--v-text); outline-offset: 2px; }
 
-  button.good    { background: #bbf7d0; border-color: #4ade80; color: #14532d; }
-  button.fair    { background: #fde68a; border-color: #f59e0b; color: #713f12; }
-  button.poor    { background: #fecaca; border-color: #f87171; color: #7f1d1d; }
+  /* The only colour on the badge, small enough to read as a signal. */
+  .dot {
+    width: 5px;
+    height: 5px;
+    flex: none;
+    border-radius: 999px;
+  }
+  .dot.good { background: var(--v-good); }
+  .dot.fair { background: var(--v-fair); }
+  .dot.poor { background: var(--v-poor); }
 
-  /* "No rating" is the absence of an answer, so it recedes instead of competing. */
   button.unknown {
     background: transparent;
-    border-color: #d4d4d8;
     border-style: dashed;
-    color: #a1a1aa;
+    color: var(--v-text-faint);
     font-weight: 500;
   }
 
   button.loading {
-    background: #f4f4f5;
-    border-color: #e4e4e7;
-    color: #c4c4cc;
+    background: var(--v-surface-sunken);
+    color: var(--v-text-faint);
     animation: verdct-badge-pulse 1.4s ease-in-out infinite;
   }
 
   /* Few ratings: same reading, drawn provisionally. */
   button[data-sample="low"] { border-style: dashed; }
 
-  .trend { font-size: 9px; font-weight: 700; line-height: 12px; }
-  .trend.rising  { color: #15803d; }
-  .trend.falling { color: #b91c1c; }
+  .trend { font-size: 9px; font-weight: 700; line-height: 12px; color: var(--v-text-muted); }
+  .trend.rising  { color: var(--v-good); }
+  .trend.falling { color: var(--v-poor); }
 
   .marker {
     font-size: 9px;
     font-weight: 700;
-    opacity: 0.65;
+    color: var(--v-text-faint);
     align-self: flex-start;
     line-height: 12px;
   }
@@ -121,12 +127,12 @@ const BADGE_STYLES = `
 
   @media (prefers-reduced-motion: reduce) {
     button { animation: none; transition: none; }
-    button:hover { transform: none; }
   }
 `;
 
 const POPOVER_STYLES = `
   :host { all: initial; }
+  ${FLOATING_TOKENS}
 
   .caret { pointer-events: none; }
 
@@ -136,14 +142,14 @@ const POPOVER_STYLES = `
     box-sizing: border-box;
     width: 248px;
     padding: 12px 13px;
-    border: 1px solid rgba(148, 163, 184, 0.18);
+    border: 1px solid var(--v-border);
     border-radius: 10px;
-    background: #0f172a;
-    color: #f8fafc;
+    background: var(--v-surface);
+    color: var(--v-text);
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     font-size: 12px;
     line-height: 1.45;
-    box-shadow: 0 12px 32px rgba(2, 6, 23, 0.38), 0 2px 8px rgba(2, 6, 23, 0.3);
+    box-shadow: 0 12px 32px var(--v-shadow-strong), 0 2px 8px var(--v-shadow);
     animation: verdct-pop-in 130ms ease-out;
   }
 
@@ -152,12 +158,12 @@ const POPOVER_STYLES = `
     z-index: 2147483647;
     width: 9px;
     height: 9px;
-    background: #0f172a;
+    background: var(--v-surface);
     transform: rotate(45deg);
     animation: verdct-fade-in 130ms ease-out;
   }
-  .caret.up   { border-left: 1px solid rgba(148, 163, 184, 0.18); border-top: 1px solid rgba(148, 163, 184, 0.18); }
-  .caret.down { border-right: 1px solid rgba(148, 163, 184, 0.18); border-bottom: 1px solid rgba(148, 163, 184, 0.18); }
+  .caret.up   { border-left: 1px solid var(--v-border); border-top: 1px solid var(--v-border); }
+  .caret.down { border-right: 1px solid var(--v-border); border-bottom: 1px solid var(--v-border); }
 
   .popover[hidden], .caret[hidden] { display: none; }
 
@@ -168,17 +174,22 @@ const POPOVER_STYLES = `
     font-weight: 600;
     letter-spacing: 0.09em;
     text-transform: uppercase;
-    color: #64748b;
+    color: var(--v-text-faint);
   }
 
   .hero { display: flex; align-items: baseline; gap: 5px; margin: 11px 0 1px; }
   .hero .score { font-size: 27px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
-  .hero .score.good { color: #4ade80; }
-  .hero .score.fair { color: #fbbf24; }
-  .hero .score.poor { color: #f87171; }
-  .hero .score.unknown { color: #94a3b8; }
-  .hero .out-of { font-size: 11px; color: #64748b; }
-  .hero .count { margin-left: auto; font-size: 11px; color: #94a3b8; font-variant-numeric: tabular-nums; }
+  .hero .score.good { color: var(--v-good); }
+  .hero .score.fair { color: var(--v-fair); }
+  .hero .score.poor { color: var(--v-poor); }
+  .hero .score.unknown { color: var(--v-text-faint); }
+  .hero .out-of { font-size: 11px; color: var(--v-text-faint); }
+  .hero .count {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--v-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
 
   .metric { margin-top: 9px; }
   .metric-head {
@@ -186,28 +197,28 @@ const POPOVER_STYLES = `
     justify-content: space-between;
     margin-bottom: 4px;
     font-size: 11px;
-    color: #cbd5e1;
+    color: var(--v-text-muted);
   }
-  .metric-head b { color: #f1f5f9; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .metric-head b { color: var(--v-text); font-weight: 600; font-variant-numeric: tabular-nums; }
 
-  .track { height: 4px; border-radius: 999px; background: rgba(148, 163, 184, 0.22); overflow: hidden; }
+  .track { height: 4px; border-radius: 999px; background: var(--v-track); overflow: hidden; }
   .fill { height: 100%; border-radius: 999px; }
-  .fill.quality    { background: linear-gradient(90deg, #34d399, #10b981); }
-  .fill.difficulty { background: linear-gradient(90deg, #fbbf24, #f97316); }
-  .fill.retake     { background: linear-gradient(90deg, #38bdf8, #0ea5e9); }
+  .fill.quality    { background: var(--v-good); }
+  .fill.difficulty { background: var(--v-fair); }
+  .fill.retake     { background: var(--v-text-muted); }
 
   .note {
     margin-top: 10px;
     padding-top: 9px;
-    border-top: 1px solid rgba(148, 163, 184, 0.16);
+    border-top: 1px solid var(--v-border);
     font-size: 11px;
-    color: #94a3b8;
+    color: var(--v-text-muted);
   }
   .note.plain { margin-top: 6px; padding-top: 0; border-top: 0; }
   .trend-note { margin-top: 8px; font-size: 11px; font-weight: 600; }
-  .trend-note.rising  { color: #4ade80; }
-  .trend-note.falling { color: #f87171; }
-  .trend-note.steady  { color: #94a3b8; }
+  .trend-note.rising  { color: var(--v-good); }
+  .trend-note.falling { color: var(--v-poor); }
+  .trend-note.steady  { color: var(--v-text-muted); }
 
   .favorite {
     all: unset;
@@ -218,16 +229,16 @@ const POPOVER_STYLES = `
     width: 100%;
     margin-top: 10px;
     padding: 6px 8px;
-    border: 1px solid rgba(148, 163, 184, 0.28);
+    border: 1px solid var(--v-border);
     border-radius: 7px;
-    color: #cbd5e1;
+    color: var(--v-text-muted);
     font-size: 11.5px;
     font-weight: 600;
     cursor: pointer;
   }
-  .favorite:hover { background: rgba(148, 163, 184, 0.12); color: #f1f5f9; }
-  .favorite:focus-visible { outline: 2px solid #38bdf8; outline-offset: 1px; }
-  .favorite[aria-pressed="true"] { border-color: #fbbf24; color: #fbbf24; }
+  .favorite:hover { background: var(--v-surface-sunken); color: var(--v-text); }
+  .favorite:focus-visible { outline: 2px solid var(--v-text); outline-offset: 1px; }
+  .favorite[aria-pressed="true"] { border-color: var(--v-fair); color: var(--v-fair); }
 
   @keyframes verdct-pop-in {
     from { opacity: 0; transform: translateY(-3px); }
@@ -527,7 +538,12 @@ function paintBadge(handle: BadgeHandle): void {
   const { text, marker, tone, lowSample, trend, aria } = badgeLabel(handle.state);
   handle.button.className = tone;
   handle.button.setAttribute('aria-label', `${handle.professorName}: ${aria}`);
-  handle.button.textContent = text;
+  handle.button.replaceChildren();
+
+  if (tone === 'good' || tone === 'fair' || tone === 'poor') {
+    handle.button.append(element('span', `dot ${tone}`));
+  }
+  handle.button.append(document.createTextNode(text));
 
   if (lowSample) {
     handle.button.dataset.sample = 'low';

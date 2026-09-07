@@ -55,8 +55,8 @@ function ensureStyles(): void {
   // Verdct has not explicitly marked.
   style.textContent = `
     [${VERDCT_BEST_ATTRIBUTE}="true"] {
-      background-image: linear-gradient(90deg, rgba(34, 197, 94, 0.13), rgba(34, 197, 94, 0) 55%) !important;
-      box-shadow: inset 3px 0 0 0 #22c55e;
+      background-image: linear-gradient(90deg, rgba(31, 157, 99, 0.09), rgba(31, 157, 99, 0) 50%) !important;
+      box-shadow: inset 2px 0 0 0 #1f9d63;
     }
   `;
   document.head.append(style);
@@ -96,14 +96,15 @@ const CHIP_STYLES = `
     align-items: center;
     margin-left: 6px;
     padding: 1px 6px;
+    border: 1px solid rgba(31, 157, 99, 0.35);
     border-radius: 5px;
-    background: #16a34a;
-    color: #fff;
+    background: rgba(31, 157, 99, 0.1);
+    color: #14764a;
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     font-size: 9px;
     font-weight: 700;
-    letter-spacing: 0.07em;
-    line-height: 14px;
+    letter-spacing: 0.06em;
+    line-height: 13px;
     text-transform: uppercase;
     white-space: nowrap;
     vertical-align: middle;

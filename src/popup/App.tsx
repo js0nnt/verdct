@@ -22,19 +22,25 @@ export function App() {
   useEffect(refreshStats, [refreshStats]);
 
   return (
-    <main className="w-80 bg-slate-950 p-5 text-slate-100">
-      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-400">Verdct</p>
-      <h1 className="mt-2 text-xl font-semibold">See the verdict before you register.</h1>
-      <p className="mt-3 text-sm leading-6 text-slate-300">
+    <main className="w-80 bg-surface p-5 text-ink dark:bg-surface-dark dark:text-inkdark">
+      <header className="flex items-center gap-2.5">
+        <span className="verdct-mark h-5 w-5 rounded-md" aria-hidden="true" />
+        <p className="text-[13px] font-semibold tracking-tight">Verdct</p>
+      </header>
+
+      <h1 className="mt-3 text-lg font-semibold leading-snug tracking-tight">
+        See the verdict before you register.
+      </h1>
+      <p className="mt-2 text-[13px] leading-5 text-ink-muted dark:text-inkdark-muted">
         Open ASU Class Search and ratings appear next to each instructor. Hover a badge for
         difficulty, would-take-again, and rating count.
       </p>
 
-      <dl className="mt-4 flex items-baseline justify-between border-t border-slate-800 pt-3 text-sm">
-        <dt className="text-slate-400">Cached professors</dt>
+      <dl className="mt-4 flex items-baseline justify-between border-t border-line pt-3 text-sm dark:border-line-dark">
+        <dt className="text-ink-muted dark:text-inkdark-muted">Cached professors</dt>
         <dd className="font-semibold tabular-nums">{stats ? stats.entryCount : '—'}</dd>
       </dl>
-      <p className="mt-1 text-xs text-slate-500">
+      <p className="mt-1 text-xs text-ink-faint dark:text-inkdark-faint">
         {stats ? formatAge(stats.oldestFetchedAt) : 'Reading cache…'}
       </p>
 

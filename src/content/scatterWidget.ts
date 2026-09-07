@@ -1,6 +1,7 @@
 import { VERDCT_SCATTER_ATTRIBUTE } from '../shared/constants';
 import type { ProfessorRating } from '../shared/types';
 import { ratingTone } from './badgeRenderer';
+import { ACCENT_GRADIENT, FLOATING_TOKENS } from './theme';
 
 /**
  * The spec calls for this to open from a course header, but ASU's results are a
@@ -25,6 +26,7 @@ let open = false;
 
 const STYLES = `
   :host { all: initial; }
+  ${FLOATING_TOKENS}
 
   .launcher, .panel {
     position: fixed;
@@ -38,31 +40,37 @@ const STYLES = `
     bottom: 18px;
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: 8px;
     padding: 9px 14px;
-    border: 0;
+    border: 1px solid var(--v-border);
     border-radius: 999px;
-    background: #0f172a;
-    color: #f8fafc;
+    background: var(--v-surface);
+    color: var(--v-text);
     font-size: 12.5px;
     font-weight: 600;
     cursor: pointer;
-    box-shadow: 0 6px 20px rgba(2, 6, 23, 0.32);
-    transition: transform 130ms ease, box-shadow 130ms ease;
+    box-shadow: 0 6px 20px var(--v-shadow);
+    transition: border-color 130ms ease, box-shadow 130ms ease;
   }
-  .launcher:hover { transform: translateY(-1px); box-shadow: 0 10px 26px rgba(2, 6, 23, 0.4); }
-  .launcher:focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
-  .launcher .dot { width: 7px; height: 7px; border-radius: 999px; background: #4ade80; }
+  .launcher:hover { border-color: var(--v-border-strong); box-shadow: 0 10px 26px var(--v-shadow-strong); }
+  .launcher:focus-visible { outline: 2px solid var(--v-text); outline-offset: 2px; }
+  /* The single saturated element, matching the extension mark. */
+  .launcher .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background: ${ACCENT_GRADIENT};
+  }
 
   .panel {
     bottom: 18px;
     width: 388px;
     padding: 14px 15px 12px;
-    border: 1px solid rgba(148, 163, 184, 0.2);
+    border: 1px solid var(--v-border);
     border-radius: 12px;
-    background: #0f172a;
-    color: #f8fafc;
-    box-shadow: 0 18px 48px rgba(2, 6, 23, 0.45);
+    background: var(--v-surface);
+    color: var(--v-text);
+    box-shadow: 0 18px 48px var(--v-shadow-strong);
     animation: verdct-scatter-in 150ms ease-out;
   }
   .panel[hidden], .launcher[hidden] { display: none; }
@@ -73,42 +81,46 @@ const STYLES = `
     all: unset;
     padding: 2px 6px;
     border-radius: 5px;
-    color: #94a3b8;
+    color: var(--v-text-faint);
     font-size: 15px;
     line-height: 1;
     cursor: pointer;
   }
-  .close:hover { background: rgba(148, 163, 184, 0.16); color: #f1f5f9; }
-  .close:focus-visible { outline: 2px solid #38bdf8; }
+  .close:hover { background: var(--v-surface-sunken); color: var(--v-text); }
+  .close:focus-visible { outline: 2px solid var(--v-text); }
 
   .courses { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
   .course {
     all: unset;
     padding: 2px 8px;
-    border: 1px solid rgba(148, 163, 184, 0.3);
+    border: 1px solid var(--v-border);
     border-radius: 999px;
-    color: #cbd5e1;
+    color: var(--v-text-muted);
     font-size: 10.5px;
     font-weight: 600;
     cursor: pointer;
   }
-  .course[aria-pressed="true"] { background: #1e293b; border-color: #38bdf8; color: #f8fafc; }
+  .course[aria-pressed="true"] {
+    background: var(--v-surface-sunken);
+    border-color: var(--v-border-strong);
+    color: var(--v-text);
+  }
 
-  .hint { margin-top: 9px; font-size: 10.5px; color: #64748b; }
+  .hint { margin-top: 9px; font-size: 10.5px; color: var(--v-text-faint); }
   svg { display: block; margin-top: 4px; overflow: visible; }
-  .axis-line { stroke: rgba(148, 163, 184, 0.35); stroke-width: 1; }
-  .grid { stroke: rgba(148, 163, 184, 0.12); stroke-width: 1; }
-  .axis-text { fill: #64748b; font-size: 9px; }
-  .axis-title { fill: #94a3b8; font-size: 10px; font-weight: 600; }
+  .axis-line { stroke: var(--v-border-strong); stroke-width: 1; }
+  .grid { stroke: var(--v-border); stroke-width: 1; }
+  .axis-text { fill: var(--v-text-faint); font-size: 9px; }
+  .axis-title { fill: var(--v-text-muted); font-size: 10px; font-weight: 600; }
   .zone { font-size: 8.5px; font-weight: 600; letter-spacing: 0.04em; }
-  .zone.good { fill: rgba(74, 222, 128, 0.5); }
-  .zone.bad  { fill: rgba(248, 113, 113, 0.45); }
-  .point { stroke: #0f172a; stroke-width: 1.5; cursor: default; }
-  .point.good { fill: #4ade80; }
-  .point.fair { fill: #fbbf24; }
-  .point.poor { fill: #f87171; }
-  .point.unknown { fill: #94a3b8; }
-  .label { fill: #e2e8f0; font-size: 9px; font-weight: 600; pointer-events: none; }
+  .zone.good { fill: var(--v-good); opacity: 0.75; }
+  .zone.bad  { fill: var(--v-poor); opacity: 0.7; }
+  .point { stroke: var(--v-surface); stroke-width: 1.5; cursor: default; }
+  .point.good { fill: var(--v-good); }
+  .point.fair { fill: var(--v-fair); }
+  .point.poor { fill: var(--v-poor); }
+  .point.unknown { fill: var(--v-text-faint); }
+  .label { fill: var(--v-text); font-size: 9px; font-weight: 600; pointer-events: none; }
 
   @keyframes verdct-scatter-in {
     from { opacity: 0; transform: translateY(6px); }
@@ -117,7 +129,6 @@ const STYLES = `
   @media (prefers-reduced-motion: reduce) {
     .panel { animation: none; }
     .launcher { transition: none; }
-    .launcher:hover { transform: none; }
   }
 `;
 
