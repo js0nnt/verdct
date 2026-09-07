@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { access, mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -152,6 +152,30 @@ try {
     throw new Error(`The Verdct popup did not render as expected: ${JSON.stringify(popup)}`);
   }
 
+  const controlsEvaluation = await connection.send('Runtime.evaluate', {
+    expression: `(() => ({
+      ttlOptions: document.querySelector('#verdct-ttl')?.options?.length ?? 0,
+      sliders: document.querySelectorAll('input[type="range"]').length,
+      hasClearButton: [...document.querySelectorAll('button')].some((b) => /Clear cached/i.test(b.textContent)),
+    }))()`,
+    returnByValue: true,
+  }, sessionId);
+  const controls = controlsEvaluation.result?.value;
+
+  if (controls?.ttlOptions !== 5 || controls?.sliders !== 2 || !controls?.hasClearButton) {
+    throw new Error(`The popup settings controls did not render: ${JSON.stringify(controls)}`);
+  }
+
+  // Optional visual capture for design review: VERDCT_SCREENSHOT=path npm run validate:chrome
+  const screenshotPath = process.env.VERDCT_SCREENSHOT;
+  if (screenshotPath) {
+    const shot = await connection.send('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: true,
+    }, sessionId);
+    await writeFile(screenshotPath, Buffer.from(shot.data, 'base64'));
+  }
+
   const healthEvaluation = await connection.send('Runtime.evaluate', {
     expression: `new Promise((resolve) => {
       chrome.runtime.sendMessage(
@@ -270,6 +294,8 @@ try {
       numRatings: rating.numRatings,
       matchConfidence: rating.matchConfidence,
     },
+    settingsControls: controls,
+    screenshot: screenshotPath ?? null,
     cacheServedRepeatLookup: true,
     cachedProfessors: cached.cacheKeys.length,
     popupErrors: browserErrors.length,

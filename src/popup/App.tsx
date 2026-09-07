@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { readCacheStats } from '../background/cache';
 import type { CacheStats } from '../shared/types';
+import { Settings } from './Settings';
 
 function formatAge(fetchedAt: number | null): string {
   if (fetchedAt === null) return 'nothing cached yet';
@@ -13,9 +14,11 @@ function formatAge(fetchedAt: number | null): string {
 export function App() {
   const [stats, setStats] = useState<CacheStats | null>(null);
 
-  useEffect(() => {
+  const refreshStats = useCallback(() => {
     void readCacheStats().then(setStats);
   }, []);
+
+  useEffect(refreshStats, [refreshStats]);
 
   return (
     <main className="w-80 bg-slate-950 p-5 text-slate-100">
@@ -28,30 +31,13 @@ export function App() {
 
       <dl className="mt-4 flex items-baseline justify-between border-t border-slate-800 pt-3 text-sm">
         <dt className="text-slate-400">Cached professors</dt>
-        <dd className="font-semibold">{stats ? stats.entryCount : '—'}</dd>
+        <dd className="font-semibold tabular-nums">{stats ? stats.entryCount : '—'}</dd>
       </dl>
       <p className="mt-1 text-xs text-slate-500">
         {stats ? formatAge(stats.oldestFetchedAt) : 'Reading cache…'}
       </p>
 
-      <ul className="mt-4 space-y-1 text-xs text-slate-400">
-        <li>
-          <span className="mr-2 inline-block h-2 w-2 rounded-full bg-green-400" />
-          4.0 and above
-        </li>
-        <li>
-          <span className="mr-2 inline-block h-2 w-2 rounded-full bg-amber-500" />
-          2.5 to 3.9
-        </li>
-        <li>
-          <span className="mr-2 inline-block h-2 w-2 rounded-full bg-red-400" />
-          Below 2.5
-        </li>
-        <li>
-          <span className="mr-2 inline-block h-2 w-2 rounded-full bg-zinc-300" />
-          No rating found
-        </li>
-      </ul>
+      <Settings onCacheCleared={refreshStats} />
     </main>
   );
 }
