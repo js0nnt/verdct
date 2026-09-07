@@ -14,6 +14,7 @@ function rating(overrides: Partial<ProfessorRating>): ProfessorRating {
     numRatings: 40,
     fetchedAt: Date.now(),
     matchConfidence: 'high',
+    trend: null,
     ...overrides,
   };
   // Distinct cache keys per professor, so best-section counting sees real choices.
@@ -24,8 +25,8 @@ function rating(overrides: Partial<ProfessorRating>): ProfessorRating {
 const scenarios: Array<{ name: string; meta: string; state: BadgeState }> = [
   {
     name: 'Jay Barraza',
-    meta: 'high rating, large sample',
-    state: { status: 'ready', rating: rating({ displayName: 'Jay Barraza', overallRating: 4.6, difficulty: 2.4, wouldTakeAgainPct: 91, numRatings: 128 }) },
+    meta: 'high rating, large sample, improving',
+    state: { status: 'ready', rating: rating({ displayName: 'Jay Barraza', overallRating: 4.6, difficulty: 2.4, wouldTakeAgainPct: 91, numRatings: 128, trend: 'rising' }) },
   },
   {
     name: 'Phong Chau',
@@ -34,13 +35,13 @@ const scenarios: Array<{ name: string; meta: string; state: BadgeState }> = [
   },
   {
     name: 'Chandrani Banerjee',
-    meta: 'mid rating',
-    state: { status: 'ready', rating: rating({ displayName: 'Chandrani Banerjee', overallRating: 3.6, difficulty: 3.4, wouldTakeAgainPct: 58, numRatings: 44 }) },
+    meta: 'mid rating, steady (no arrow)',
+    state: { status: 'ready', rating: rating({ displayName: 'Chandrani Banerjee', overallRating: 3.6, difficulty: 3.4, wouldTakeAgainPct: 58, numRatings: 44, trend: 'steady' }) },
   },
   {
     name: 'Frank Arthur',
-    meta: 'mid rating',
-    state: { status: 'ready', rating: rating({ displayName: 'Frank Arthur', overallRating: 3.5, difficulty: 3.5, wouldTakeAgainPct: 57, numRatings: 150 }) },
+    meta: 'mid rating, declining',
+    state: { status: 'ready', rating: rating({ displayName: 'Frank Arthur', overallRating: 3.5, difficulty: 3.5, wouldTakeAgainPct: 57, numRatings: 150, trend: 'falling' }) },
   },
   {
     name: 'Sukitha Adappa',

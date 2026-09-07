@@ -25,6 +25,7 @@ function rating(overrides: Partial<ProfessorRating> = {}): ProfessorRating {
     numRatings: 40,
     fetchedAt: 1_000,
     matchConfidence: 'high',
+    trend: null,
     ...overrides,
   };
 }

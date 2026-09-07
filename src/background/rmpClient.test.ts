@@ -61,6 +61,7 @@ describe('matchTeacherCandidates', () => {
   it('maps a confident match to the shared aggregate model', () => {
     const candidates = parseTeacherCandidates(validPayload);
     expect(matchTeacherCandidates('Mohacsy, H.', candidates, 1234)).toEqual({
+      teacherId: 'VGVhY2hlci00Nzc1MjQ=',
       normalizedName: 'h mohacsy',
       displayName: 'Hedvig Mohacsy',
       overallRating: 3.5,
@@ -69,6 +70,7 @@ describe('matchTeacherCandidates', () => {
       numRatings: 150,
       fetchedAt: 1234,
       matchConfidence: 'low',
+      trend: null,
     });
   });
 

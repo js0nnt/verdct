@@ -228,6 +228,14 @@ try {
     throw new Error(`The live RMP lookup failed validation: ${JSON.stringify(lookup)}`);
   }
 
+  // 150 reviews is far above the trend floor, so this must resolve to a
+  // direction rather than null.
+  if (!['rising', 'falling', 'steady'].includes(rating.trend)) {
+    throw new Error(
+      `A heavily-reviewed professor returned no trend verdict: ${JSON.stringify(rating.trend)}`,
+    );
+  }
+
   // Repeat the lookup with different casing and spacing. The cache is keyed by
   // normalized name, so this must be served from storage: an identical
   // fetchedAt proves no second RMP request was made.
@@ -293,6 +301,7 @@ try {
       wouldTakeAgainPct: rating.wouldTakeAgainPct,
       numRatings: rating.numRatings,
       matchConfidence: rating.matchConfidence,
+      trend: rating.trend,
     },
     settingsControls: controls,
     screenshot: screenshotPath ?? null,

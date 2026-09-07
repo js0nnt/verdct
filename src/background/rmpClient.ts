@@ -5,6 +5,7 @@ import {
 } from '../shared/constants';
 import type { ProfessorRating } from '../shared/types';
 import { findBestNameMatch, normalizeProfessorName } from './nameMatcher';
+import { MIN_TREND_SAMPLES, MAX_TREND_SAMPLES, computeTrend, parseRatingSamples } from './trend';
 
 interface RmpTeacherCandidate {
   id: string;
@@ -46,6 +47,30 @@ const TEACHER_SEARCH_QUERY = `
             school {
               id
               name
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+/**
+ * Individual reviews, fetched only for a confident match that has enough of
+ * them to be worth analysing. Kept as a second request rather than folded into
+ * the search so the search response does not carry 20 reviews for each of 20
+ * candidate teachers.
+ */
+const TEACHER_RATINGS_QUERY = `
+  query VerdctTeacherRatings($id: ID!, $count: Int!) {
+    node(id: $id) {
+      ... on Teacher {
+        ratings(first: $count) {
+          edges {
+            node {
+              date
+              clarityRating
+              helpfulRating
             }
           }
         }
@@ -126,6 +151,7 @@ function noMatchRating(professorName: string, fetchedAt: number): ProfessorRatin
     numRatings: 0,
     fetchedAt,
     matchConfidence: 'none',
+    trend: null,
   };
 }
 
@@ -133,13 +159,14 @@ export function matchTeacherCandidates(
   professorName: string,
   candidates: RmpTeacherCandidate[],
   fetchedAt = Date.now(),
-): ProfessorRating {
+): ProfessorRating & { teacherId?: string } {
   const match = findBestNameMatch(professorName, candidates);
   if (!match) return noMatchRating(professorName, fetchedAt);
 
   const candidate = match.candidate;
   const hasRatings = candidate.numRatings > 0;
   return {
+    teacherId: candidate.id,
     normalizedName: normalizeProfessorName(professorName),
     displayName: `${candidate.firstName} ${candidate.lastName}`,
     overallRating: hasRatings ? candidate.avgRating : null,
@@ -148,6 +175,7 @@ export function matchTeacherCandidates(
     numRatings: candidate.numRatings,
     fetchedAt,
     matchConfidence: match.confidence,
+    trend: null,
   };
 }
 
@@ -164,49 +192,91 @@ function enqueueRequest<T>(task: () => Promise<T>, minimumDelayMs: number): Prom
   return scheduled;
 }
 
-export function lookupProfessorRating(
+async function postGraphql(
+  fetcher: typeof fetch,
+  body: Record<string, unknown>,
+): Promise<unknown> {
+  const response = await fetcher(RMP_GRAPHQL_ENDPOINT, {
+    method: 'POST',
+    credentials: 'omit',
+    headers: {
+      Accept: 'application/json',
+      Authorization: 'null',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`RMP lookup failed with HTTP ${response.status}.`);
+  }
+
+  const payload: unknown = await response.json();
+  if (isRecord(payload) && Array.isArray(payload.errors) && payload.errors.length > 0) {
+    throw new Error('RMP returned a GraphQL error.');
+  }
+  return payload;
+}
+
+/**
+ * Best-effort: a trend is a nicety, so a failure here returns null rather than
+ * discarding a rating the caller already has.
+ */
+export async function fetchRatingTrend(
+  teacherId: string,
+  options: LookupOptions = {},
+): Promise<ProfessorRating['trend']> {
+  try {
+    const payload = await postGraphql(options.fetcher ?? fetch, {
+      operationName: 'VerdctTeacherRatings',
+      query: TEACHER_RATINGS_QUERY,
+      variables: { id: teacherId, count: MAX_TREND_SAMPLES },
+    });
+    return computeTrend(parseRatingSamples(payload));
+  } catch (error) {
+    console.warn('[Verdct] Trend lookup failed; continuing without it', error);
+    return null;
+  }
+}
+
+export async function lookupProfessorRating(
   professorName: string,
   options: LookupOptions = {},
 ): Promise<ProfessorRating> {
   const requestedName = professorName.trim();
   const now = options.now ?? Date.now;
   if (!requestedName) {
-    return Promise.resolve(noMatchRating(professorName, now()));
+    return noMatchRating(professorName, now());
   }
 
-  return enqueueRequest(async () => {
-    const response = await (options.fetcher ?? fetch)(RMP_GRAPHQL_ENDPOINT, {
-      method: 'POST',
-      credentials: 'omit',
-      headers: {
-        Accept: 'application/json',
-        Authorization: 'null',
-        'Content-Type': 'application/json',
+  const minimumDelayMs = options.minimumDelayMs ?? MINIMUM_RMP_REQUEST_INTERVAL_MS;
+
+  const { teacherId, ...rating } = await enqueueRequest(async () => {
+    const payload = await postGraphql(options.fetcher ?? fetch, {
+      operationName: 'VerdctTeacherSearch',
+      query: TEACHER_SEARCH_QUERY,
+      variables: {
+        count: 20,
+        query: { text: requestedName, schoolID: ASU_RMP_SCHOOL_ID, fallback: false },
       },
-      body: JSON.stringify({
-        operationName: 'VerdctTeacherSearch',
-        query: TEACHER_SEARCH_QUERY,
-        variables: {
-          count: 20,
-          query: {
-            text: requestedName,
-            schoolID: ASU_RMP_SCHOOL_ID,
-            fallback: false,
-          },
-        },
-      }),
-      signal: AbortSignal.timeout(10_000),
     });
 
-    if (!response.ok) {
-      throw new Error(`RMP lookup failed with HTTP ${response.status}.`);
-    }
-
-    const payload: unknown = await response.json();
-    if (isRecord(payload) && Array.isArray(payload.errors) && payload.errors.length > 0) {
-      throw new Error('RMP returned a GraphQL error.');
-    }
-
     return matchTeacherCandidates(requestedName, parseTeacherCandidates(payload), now());
-  }, options.minimumDelayMs ?? MINIMUM_RMP_REQUEST_INTERVAL_MS);
+  }, minimumDelayMs);
+
+  // The second request is only worth making for a confident match with enough
+  // reviews to split, so thinly-rated professors cost one request as before.
+  if (!teacherId || rating.matchConfidence !== 'high' || rating.numRatings < MIN_TREND_SAMPLES) {
+    return rating;
+  }
+
+  // Enqueued separately rather than nested: the queue is serial, so a nested
+  // enqueue would wait on the request that is still holding it.
+  const trend = await enqueueRequest(
+    () => fetchRatingTrend(teacherId, options),
+    minimumDelayMs,
+  );
+
+  return { ...rating, trend };
 }

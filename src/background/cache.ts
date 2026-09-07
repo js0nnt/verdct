@@ -1,7 +1,14 @@
 import { CACHE_ENTRY_LIMIT, CACHE_STORAGE_KEY } from '../shared/constants';
 import { readSettings } from '../shared/settings';
 import { createWriteQueue, defaultStorageArea, type StorageAreaLike } from '../shared/storage';
-import type { CacheEntry, CacheStats, CacheStore, ProfessorRating, VerdctSettings } from '../shared/types';
+import type {
+  CacheEntry,
+  CacheStats,
+  CacheStore,
+  ProfessorRating,
+  RatingTrend,
+  VerdctSettings,
+} from '../shared/types';
 
 interface CacheOptions {
   area?: StorageAreaLike;
@@ -41,6 +48,13 @@ function parseEntry(value: unknown): CacheEntry | null {
   const optionalNumber = (input: unknown): number | null =>
     typeof input === 'number' && Number.isFinite(input) ? input : null;
 
+  // Entries cached before trends existed simply have no trend, rather than
+  // being discarded and refetched.
+  const trend: RatingTrend | null =
+    rating.trend === 'rising' || rating.trend === 'falling' || rating.trend === 'steady'
+      ? rating.trend
+      : null;
+
   return {
     rating: {
       normalizedName: rating.normalizedName,
@@ -51,6 +65,7 @@ function parseEntry(value: unknown): CacheEntry | null {
       numRatings: rating.numRatings,
       fetchedAt: rating.fetchedAt,
       matchConfidence: confidence,
+      trend,
     },
     lastAccessedAt:
       typeof value.lastAccessedAt === 'number' && Number.isFinite(value.lastAccessedAt)

@@ -91,6 +91,10 @@ const BADGE_STYLES = `
   /* Few ratings: same reading, drawn provisionally. */
   button[data-sample="low"] { border-style: dashed; }
 
+  .trend { font-size: 9px; font-weight: 700; line-height: 12px; }
+  .trend.rising  { color: #15803d; }
+  .trend.falling { color: #b91c1c; }
+
   .marker {
     font-size: 9px;
     font-weight: 700;
@@ -193,6 +197,10 @@ const POPOVER_STYLES = `
     color: #94a3b8;
   }
   .note.plain { margin-top: 6px; padding-top: 0; border-top: 0; }
+  .trend-note { margin-top: 8px; font-size: 11px; font-weight: 600; }
+  .trend-note.rising  { color: #4ade80; }
+  .trend-note.falling { color: #f87171; }
+  .trend-note.steady  { color: #94a3b8; }
 
   @keyframes verdct-pop-in {
     from { opacity: 0; transform: translateY(-3px); }
@@ -328,6 +336,10 @@ function popoverContent(state: BadgeState, professorName: string): DocumentFragm
     );
   }
 
+  if (rating.trend) {
+    fragment.append(element('div', `trend-note ${rating.trend}`, TREND_WORDS[rating.trend]));
+  }
+
   const notes: string[] = [];
   if (rating.numRatings < LOW_SAMPLE_RATING_COUNT) {
     notes.push(`Only ${rating.numRatings} rating${rating.numRatings === 1 ? '' : 's'} — treat as provisional.`);
@@ -384,20 +396,37 @@ interface BadgeLabel {
   marker: string;
   tone: BadgeTone | 'loading';
   lowSample: boolean;
+  trend: ProfessorRating['trend'];
   aria: string;
 }
 
+const TREND_GLYPH: Record<'rising' | 'falling', string> = { rising: '▲', falling: '▼' };
+const TREND_WORDS = {
+  rising: 'Recent reviews are better than their older ones.',
+  falling: 'Recent reviews are worse than their older ones.',
+  steady: 'Recent reviews are in line with their older ones.',
+} as const;
+
 function badgeLabel(state: BadgeState): BadgeLabel {
   if (state.status === 'loading') {
-    return { text: '···', marker: '', tone: 'loading', lowSample: false, aria: 'loading rating' };
+    return {
+      text: '···', marker: '', tone: 'loading', lowSample: false, trend: null,
+      aria: 'loading rating',
+    };
   }
   if (state.status === 'error') {
-    return { text: '—', marker: '', tone: 'unknown', lowSample: false, aria: 'rating unavailable' };
+    return {
+      text: '—', marker: '', tone: 'unknown', lowSample: false, trend: null,
+      aria: 'rating unavailable',
+    };
   }
 
   const { rating } = state;
   if (rating.matchConfidence === 'none' || rating.overallRating === null || rating.numRatings === 0) {
-    return { text: '—', marker: '', tone: 'unknown', lowSample: false, aria: 'no rating found' };
+    return {
+      text: '—', marker: '', tone: 'unknown', lowSample: false, trend: null,
+      aria: 'no rating found',
+    };
   }
 
   const lowSample = rating.numRatings < LOW_SAMPLE_RATING_COUNT;
@@ -406,14 +435,16 @@ function badgeLabel(state: BadgeState): BadgeLabel {
     marker: rating.matchConfidence === 'low' ? '?' : '',
     tone: ratingTone(rating),
     lowSample,
+    trend: rating.trend,
     aria:
       `rated ${rating.overallRating.toFixed(1)} out of 5 from ${rating.numRatings} ratings` +
-      (lowSample ? ', provisional' : ''),
+      (lowSample ? ', provisional' : '') +
+      (rating.trend === 'rising' || rating.trend === 'falling' ? `, ${rating.trend}` : ''),
   };
 }
 
 function paintBadge(handle: BadgeHandle): void {
-  const { text, marker, tone, lowSample, aria } = badgeLabel(handle.state);
+  const { text, marker, tone, lowSample, trend, aria } = badgeLabel(handle.state);
   handle.button.className = tone;
   handle.button.setAttribute('aria-label', `${handle.professorName}: ${aria}`);
   handle.button.textContent = text;
@@ -424,9 +455,14 @@ function paintBadge(handle: BadgeHandle): void {
     delete handle.button.dataset.sample;
   }
 
+  // Only a direction earns a glyph; "steady" is the common case and would just
+  // add noise to every badge on the page.
+  if (trend === 'rising' || trend === 'falling') {
+    handle.button.append(element('span', `trend ${trend}`, TREND_GLYPH[trend]));
+  }
+
   if (marker) {
-    const markerElement = element('span', 'marker', marker);
-    handle.button.append(markerElement);
+    handle.button.append(element('span', 'marker', marker));
   }
 }
 

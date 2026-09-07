@@ -164,7 +164,14 @@ try {
   let pageState;
   for (let attempt = 0; attempt < 300; attempt += 1) {
     pageState = await readBadgeState(connection, sessionId);
-    if (pageState?.rowCount > 0 && pageState.ratedBadges.length > 0) break;
+    if (
+      pageState?.rowCount > 0 &&
+      pageState.badgeCount > 0 &&
+      pageState.ratedBadges.length > 0 &&
+      pageState.resolvedBadges.length === pageState.badgeCount
+    ) {
+      break;
+    }
     await delay(200);
   }
 
@@ -202,7 +209,7 @@ try {
   // so this also exercises the orphan-replacement path in the renderer.
   let mutationObserved = false;
   let mutationState;
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  for (let attempt = 0; attempt < 150; attempt += 1) {
     mutationState = await readBadgeState(connection, sessionId);
     if (
       mutationState.badgeCount > initialBadgeCount &&
@@ -231,7 +238,8 @@ try {
   if (!finalState.bestRowCount) {
     throw new Error(
       `No best section was highlighted: ${JSON.stringify({
-        scatterLabel: finalState.scatterLabel,
+        trendArrows: finalState.ratedBadges.filter((badge) => /[▲▼]/.test(badge.text)).length,
+    scatterLabel: finalState.scatterLabel,
     bestRowCount: finalState.bestRowCount,
         ratedBadges: finalState.ratedBadges.length,
       })}`,
@@ -279,6 +287,7 @@ try {
     badgeCount: finalState.badgeCount,
     unresolvedBadges: finalState.badgeCount - finalState.resolvedBadges.length,
     toneBreakdown,
+    trendArrows: finalState.ratedBadges.filter((badge) => /[▲▼]/.test(badge.text)).length,
     scatterLabel: finalState.scatterLabel,
     bestRowCount: finalState.bestRowCount,
     bestProfessors: [...new Set(finalState.bestProfessors)],

@@ -1,3 +1,6 @@
+/** Direction of a professor's recent reviews against their older ones. */
+export type RatingTrend = 'rising' | 'falling' | 'steady';
+
 export interface ProfessorRating {
   normalizedName: string;
   displayName: string;
@@ -7,6 +10,8 @@ export interface ProfessorRating {
   numRatings: number;
   fetchedAt: number;
   matchConfidence: 'high' | 'low' | 'none';
+  /** null when there were too few reviews to say anything. */
+  trend: RatingTrend | null;
 }
 
 export interface LookupProfessorMessage {
