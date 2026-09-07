@@ -1,0 +1,34 @@
+{
+  "name": "verdct",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "preview:badges": "vite --config vite.config.preview.ts",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "validate:chrome": "node scripts/validate-chrome.mjs",
+    "validate:asu": "node scripts/validate-asu.mjs",
+    "inspect:rmp": "node scripts/inspect-rmp.mjs"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "latest",
+    "@types/chrome": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "autoprefixer": "latest",
+    "postcss": "latest",
+    "tailwindcss": "^3.4.17",
+    "typescript": "latest",
+    "vite": "latest",
+    "vitest": "latest",
+    "jsdom": "^26.1.0"
+  }
+}

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Verdct badge harness</title>
+    <style>
+      /* Approximates ASU Class Search's results list so badges are judged in context. */
+      body {
+        margin: 0;
+        padding: 28px 32px;
+        background: #fff;
+        font-family: Arial, Helvetica, sans-serif;
+        color: #191919;
+      }
+      h1 { font-size: 15px; margin: 0 0 4px; }
+      p.sub { margin: 0 0 20px; font-size: 12px; color: #666; }
+      .class-accordion {
+        display: flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 6px 10px;
+        border-bottom: 1px solid #e3e3e3;
+      }
+      .class-accordion:nth-child(even) { background: #fafafa; }
+      .class-results-cell.instructor { width: 260px; font-size: 13px; }
+      .class-results-cell.instructor a {
+        color: #8c1d40;
+        text-decoration: underline;
+      }
+      .class-results-cell.meta { font-size: 12px; color: #666; }
+    </style>
+  </head>
+  <body>
+    <h1>Verdct badge harness</h1>
+    <p class="sub">Real badgeRenderer module, mock ASU rows. Hover a badge for the popover.</p>
+    <div id="class-results"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
