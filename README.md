@@ -20,7 +20,7 @@ The MVP is complete and verified against the live ASU Class Search:
 - **Caching** — `src/background/cache.ts` stores aggregates in `chrome.storage.local` keyed by normalized name, with a 7-day TTL, a shorter 1-day TTL for no-match results, an LRU cap of 500 entries, and serialized writes. Identical in-flight lookups share one request, so a page listing the same professor eight times costs one fetch.
 - **Graceful degradation** — network failures, schema changes, corrupt cache records, and missing matches all fall back to a neutral gray badge. Nothing throws into ASU's page.
 
-## Phase 2 (in progress)
+## Phase 2 (shipped)
 
 - **Best-section highlight** — `src/content/bestSection.ts` groups rows by course and marks the section(s) taught by the highest-rated professor with a green accent and a "Best rated" label. Winning takes stronger evidence than a badge does: only high-confidence name matches with at least 5 ratings are eligible, so a 4.7 from 3 students never outranks a 4.5 from 200. A course showing only one rated professor is left unmarked, since there is no choice to make. Ties all win rather than picking arbitrarily.
 
@@ -30,15 +30,17 @@ The MVP is complete and verified against the live ASU Class Search:
 
 - **Rating trend** — `src/background/trend.ts` compares the recent half of a professor's reviews against the older half and shows ▲ or ▼ on the badge. RMP does expose per-review dates, so this is real rather than best-effort, but it is deliberately conservative: it needs at least 12 usable reviews, looks at the 20 most recent, and requires a half-point gap before calling a direction. "Steady" gets no arrow, since most professors are steady and an arrow on every badge would be noise. The reviews are re-sorted by date rather than trusting RMP's ordering, so a change in their default order cannot silently invert every arrow.
 
+- **Favorites** — the popover carries a save toggle, and the popup lists shortlisted professors joined to their cached ratings. Saving in one place updates open Class Search tabs through `chrome.storage.onChanged`. Adding this required making the popover interactive rather than a pure hover tooltip: it now stays open while the pointer is inside it, with a short close delay so moving from badge to panel does not dismiss it.
+
 Only aggregate numbers are stored. No review text, reviewer data, or browsing activity is collected or transmitted.
 
 ## Verification
 
 | Command | What it proves |
 | --- | --- |
-| `npm test` | 119 unit tests across the scanner, matcher, RMP parser, cache, and badge renderer. |
+| `npm test` | 133 unit tests across the scanner, matcher, RMP parser, cache, and badge renderer. |
 | `npm run typecheck` | Strict TypeScript across all entry points. |
-| `npm run validate:chrome` | Loads the built extension in a disposable headless Chrome profile: the service worker starts, the popup renders without errors, a live RMP lookup succeeds, and a repeat lookup in ASU's `"Last, First"` format is served from cache without a second fetch, and the settings controls render. Set `VERDCT_SCREENSHOT=<path>` to capture the popup for design review. |
+| `npm run validate:chrome` | Loads the built extension in a disposable headless Chrome profile: the service worker starts, the popup renders without errors, a live RMP lookup succeeds, and a repeat lookup in ASU's `"Last, First"` format is served from cache without a second fetch, the settings controls render, and a saved favorite is listed with the rating joined from cache. Set `VERDCT_SCREENSHOT=<path>` to capture the popup for design review. |
 | `npm run validate:asu` | Drives the live ASU Class Search and asserts every result row receives a badge that resolves out of its loading state, including a dynamically inserted row. |
 | `npm run preview:badges` | Opens a design harness at `localhost:5199` rendering the real badge module against mock ASU rows in every state — rated, provisional, unmatched, loading, failed. Use it to iterate on badge styling without a live search. |
 | `npm run inspect:rmp` | Reproduces the first-party GraphQL request inspection used to maintain the RMP client when its undocumented schema changes. |
@@ -57,4 +59,4 @@ Latest `validate:asu` run: 17 of 17 rows badged, 0 unresolved, 7 trend arrows, 1
 
 ## Not yet built
 
-The favorited-professors half of Phase 2, and Phase 3 (sentiment tags, seat alerts, alternate-section recommender)..
+Phase 3 (sentiment tags, seat alerts, alternate-section recommender)..

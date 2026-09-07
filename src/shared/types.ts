@@ -46,3 +46,10 @@ export interface CacheStats {
   entryCount: number;
   oldestFetchedAt: number | null;
 }
+
+export interface FavoriteProfessor {
+  /** Same key the rating cache uses, so a favorite can be joined to its rating. */
+  normalizedName: string;
+  displayName: string;
+  addedAt: number;
+}

@@ -1,3 +1,23 @@
+// The harness runs as an ordinary page, so chrome.storage is stubbed in memory.
+// Favorites are then genuinely clickable here rather than throwing.
+const memory: Record<string, unknown> = {};
+(globalThis as unknown as { chrome: unknown }).chrome = {
+  storage: {
+    local: {
+      get: async (keys: string | string[] | null) => {
+        const list = keys === null ? Object.keys(memory) : Array.isArray(keys) ? keys : [keys];
+        return Object.fromEntries(
+          list.filter((key) => key in memory).map((key) => [key, memory[key]]),
+        );
+      },
+      set: async (items: Record<string, unknown>) => {
+        Object.assign(memory, items);
+      },
+    },
+    onChanged: { addListener: () => undefined },
+  },
+};
+
 import { upsertBadge, type BadgeState } from '../src/content/badgeRenderer';
 import { evaluateBestSections, recordSection } from '../src/content/bestSection';
 import { recordScatterPoint, refreshScatter } from '../src/content/scatterWidget';

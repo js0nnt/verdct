@@ -1,11 +1,22 @@
-import { LOOKUP_PROFESSOR_MESSAGE, SETTINGS_STORAGE_KEY } from '../shared/constants';
+import {
+  FAVORITES_STORAGE_KEY,
+  LOOKUP_PROFESSOR_MESSAGE,
+  SETTINGS_STORAGE_KEY,
+} from '../shared/constants';
+import { parseFavorites, readFavorites } from '../shared/favorites';
 import { coerceSettings, readSettings } from '../shared/settings';
 import type {
   LookupProfessorMessage,
   LookupProfessorResponse,
   ProfessorRating,
 } from '../shared/types';
-import { configureBadges, isVerdctNode, upsertBadge, type BadgeState } from './badgeRenderer';
+import {
+  configureBadges,
+  configureFavorites,
+  isVerdctNode,
+  upsertBadge,
+  type BadgeState,
+} from './badgeRenderer';
 import { evaluateBestSections, recordSection } from './bestSection';
 import { scanClassSections, type ScannedClassSection } from './domScanner';
 import { recordScatterPoint, refreshScatter } from './scatterWidget';
@@ -126,11 +137,23 @@ observer.observe(document.documentElement, {
 });
 
 void readSettings().then(configureBadges);
+void readFavorites().then((favorites) => {
+  configureFavorites(new Set(favorites.map((favorite) => favorite.normalizedName)));
+});
 
 // Threshold changes in the popup repaint open Class Search tabs immediately.
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== 'local' || !changes[SETTINGS_STORAGE_KEY]) return;
-  configureBadges(coerceSettings(changes[SETTINGS_STORAGE_KEY].newValue));
+  if (areaName !== 'local') return;
+
+  if (changes[SETTINGS_STORAGE_KEY]) {
+    configureBadges(coerceSettings(changes[SETTINGS_STORAGE_KEY].newValue));
+  }
+
+  // Favoriting in the popup, or in another tab, is reflected here too.
+  if (changes[FAVORITES_STORAGE_KEY]) {
+    const favorites = parseFavorites(changes[FAVORITES_STORAGE_KEY].newValue);
+    configureFavorites(new Set(favorites.map((favorite) => favorite.normalizedName)));
+  }
 });
 
 scheduleScan();

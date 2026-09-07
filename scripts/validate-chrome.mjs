@@ -273,6 +273,49 @@ try {
     throw new Error(`The rating cache did not serve a repeat lookup: ${JSON.stringify(cached)}`);
   }
 
+  // Favorite the professor just looked up, reload, and confirm the popup joins
+  // the favorite to its cached rating rather than showing a bare name.
+  await connection.send('Runtime.evaluate', {
+    expression: `chrome.storage.local.set({
+      'verdct:favorites': [{
+        normalizedName: 'hedvig mohacsy',
+        displayName: 'Hedvig Mohacsy',
+        addedAt: Date.now(),
+      }],
+    })`,
+    awaitPromise: true,
+  }, sessionId);
+  await connection.send('Page.reload', {}, sessionId);
+
+  let favorites;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const evaluation = await connection.send('Runtime.evaluate', {
+      expression: `(() => {
+        const items = [...document.querySelectorAll('li')].map((li) => li.innerText.trim());
+        return { count: items.length, items };
+      })()`,
+      returnByValue: true,
+    }, sessionId);
+    favorites = evaluation.result?.value;
+    if (favorites?.items?.some((item) => item.includes('Hedvig Mohacsy'))) break;
+    await delay(100);
+  }
+
+  const favoriteRow = favorites?.items?.find((item) => item.includes('Hedvig Mohacsy'));
+  if (!favoriteRow || !/\d\.\d/.test(favoriteRow)) {
+    throw new Error(
+      `The popup did not list the favorite with its cached rating: ${JSON.stringify(favorites)}`,
+    );
+  }
+
+  if (screenshotPath) {
+    const populated = await connection.send('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: true,
+    }, sessionId);
+    await writeFile(screenshotPath, Buffer.from(populated.data, 'base64'));
+  }
+
   await delay(100);
   const browserErrors = connection.getEvents().filter((event) =>
     event.sessionId === sessionId && (
@@ -305,6 +348,7 @@ try {
     },
     settingsControls: controls,
     screenshot: screenshotPath ?? null,
+    favoriteRow,
     cacheServedRepeatLookup: true,
     cachedProfessors: cached.cacheKeys.length,
     popupErrors: browserErrors.length,

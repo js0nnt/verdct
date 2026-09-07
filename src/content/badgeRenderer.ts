@@ -3,6 +3,7 @@ import {
   VERDCT_INJECTED_SELECTOR,
   VERDCT_POPOVER_ATTRIBUTE,
 } from '../shared/constants';
+import { toggleFavorite } from '../shared/favorites';
 import { DEFAULT_SETTINGS } from '../shared/settings';
 import type { ProfessorRating, VerdctSettings } from '../shared/types';
 import type { ScannedClassSection } from './domScanner';
@@ -31,6 +32,12 @@ interface BadgeHandle {
 const badgeHandles = new WeakMap<HTMLElement, BadgeHandle>();
 const renderedBadges = new Set<HTMLElement>();
 let settings: VerdctSettings = DEFAULT_SETTINGS;
+let favoriteNames = new Set<string>();
+
+/** Keeps the popover's star in step with storage. */
+export function configureFavorites(names: Set<string>): void {
+  favoriteNames = names;
+}
 
 /**
  * Applied inside each badge's shadow root, fully isolated from ASU's page CSS.
@@ -121,7 +128,7 @@ const BADGE_STYLES = `
 const POPOVER_STYLES = `
   :host { all: initial; }
 
-  .popover, .caret { pointer-events: none; }
+  .caret { pointer-events: none; }
 
   .popover {
     position: fixed;
@@ -202,6 +209,26 @@ const POPOVER_STYLES = `
   .trend-note.falling { color: #f87171; }
   .trend-note.steady  { color: #94a3b8; }
 
+  .favorite {
+    all: unset;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-sizing: border-box;
+    width: 100%;
+    margin-top: 10px;
+    padding: 6px 8px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 7px;
+    color: #cbd5e1;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .favorite:hover { background: rgba(148, 163, 184, 0.12); color: #f1f5f9; }
+  .favorite:focus-visible { outline: 2px solid #38bdf8; outline-offset: 1px; }
+  .favorite[aria-pressed="true"] { border-color: #fbbf24; color: #fbbf24; }
+
   @keyframes verdct-pop-in {
     from { opacity: 0; transform: translateY(-3px); }
     to   { opacity: 1; transform: none; }
@@ -253,6 +280,9 @@ function popover(): PopoverParts {
   const caret = document.createElement('div');
   caret.className = 'caret up';
   caret.hidden = true;
+
+  panel.addEventListener('mouseenter', cancelScheduledHide);
+  panel.addEventListener('mouseleave', scheduleHide);
 
   shadow.append(style, caret, panel);
   document.body.append(host);
@@ -351,13 +381,56 @@ function popoverContent(state: BadgeState, professorName: string): DocumentFragm
     fragment.append(element('div', 'note', notes.join(' ')));
   }
 
+  fragment.append(favoriteButton(rating));
   return fragment;
 }
 
+function favoriteButton(rating: ProfessorRating): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'favorite';
+
+  const paint = (isFavorite: boolean): void => {
+    button.setAttribute('aria-pressed', String(isFavorite));
+    button.replaceChildren(
+      element('span', '', isFavorite ? '★' : '☆'),
+      element('span', '', isFavorite ? 'Saved to favorites' : 'Save to favorites'),
+    );
+  };
+
+  paint(favoriteNames.has(rating.normalizedName));
+
+  button.addEventListener('click', () => {
+    void toggleFavorite({
+      normalizedName: rating.normalizedName,
+      displayName: rating.displayName,
+    }).then((isFavorite) => {
+      // Repaint immediately; the storage listener will also broadcast this to
+      // any other open Class Search tab.
+      if (isFavorite) favoriteNames.add(rating.normalizedName);
+      else favoriteNames.delete(rating.normalizedName);
+      paint(isFavorite);
+    });
+  });
+
+  return button;
+}
+
 const POPOVER_GAP_PX = 10;
+/** Long enough to move the pointer from badge to panel without it vanishing. */
+const POPOVER_CLOSE_DELAY_MS = 140;
+let closeTimer: number | undefined;
+
+function cancelScheduledHide(): void {
+  if (closeTimer !== undefined) {
+    window.clearTimeout(closeTimer);
+    closeTimer = undefined;
+  }
+}
 const CARET_HALF_PX = 4;
 
 function showPopover(handle: BadgeHandle): void {
+  cancelScheduledHide();
   const { panel, caret } = popover();
   panel.replaceChildren(popoverContent(handle.state, handle.professorName));
   panel.hidden = false;
@@ -386,9 +459,16 @@ function showPopover(handle: BadgeHandle): void {
 }
 
 function hidePopover(): void {
+  cancelScheduledHide();
   if (!popoverParts) return;
   popoverParts.panel.hidden = true;
   popoverParts.caret.hidden = true;
+}
+
+/** Leaving the badge no longer closes instantly, so the panel can be clicked. */
+function scheduleHide(): void {
+  cancelScheduledHide();
+  closeTimer = window.setTimeout(hidePopover, POPOVER_CLOSE_DELAY_MS);
 }
 
 interface BadgeLabel {
@@ -514,8 +594,8 @@ function createHost(section: ScannedClassSection): BadgeHandle {
 
   button.addEventListener('mouseenter', () => showPopover(handle));
   button.addEventListener('focus', () => showPopover(handle));
-  button.addEventListener('mouseleave', hidePopover);
-  button.addEventListener('blur', hidePopover);
+  button.addEventListener('mouseleave', scheduleHide);
+  button.addEventListener('blur', scheduleHide);
 
   badgeHandles.set(host, handle);
   renderedBadges.add(host);

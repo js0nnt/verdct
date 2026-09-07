@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { readCacheStats } from '../background/cache';
 import type { CacheStats } from '../shared/types';
+import { Favorites } from './Favorites';
 import { Settings } from './Settings';
 
 function formatAge(fetchedAt: number | null): string {
@@ -36,6 +37,8 @@ export function App() {
       <p className="mt-1 text-xs text-slate-500">
         {stats ? formatAge(stats.oldestFetchedAt) : 'Reading cache…'}
       </p>
+
+      <Favorites />
 
       <Settings onCacheCleared={refreshStats} />
     </main>

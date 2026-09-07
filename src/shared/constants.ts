@@ -13,6 +13,10 @@ export const MINIMUM_RMP_REQUEST_INTERVAL_MS = 750;
 
 export const CACHE_STORAGE_KEY = 'verdct:ratings';
 export const SETTINGS_STORAGE_KEY = 'verdct:settings';
+export const FAVORITES_STORAGE_KEY = 'verdct:favorites';
+
+/** Plenty for a semester of shortlisting, and bounds what the popup renders. */
+export const FAVORITES_LIMIT = 100;
 
 /** Ratings at or above this score render green; below GOOD, at or above FAIR renders yellow. */
 export const DEFAULT_GOOD_RATING_THRESHOLD = 4;
