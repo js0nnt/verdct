@@ -110,7 +110,14 @@ const BADGE_STATE_EXPRESSION = `(() => {
       text: button?.textContent ?? '',
     };
   });
+  const bestRows = [...document.querySelectorAll('[data-verdct-best="true"]')];
   return {
+    bestRowCount: bestRows.length,
+    bestLabelled: bestRows.filter((row) => row.querySelector('[data-verdct-best-chip]')).length,
+    bestProfessors: bestRows.map((row) => {
+      const host = row.querySelector('[data-verdct-badge]');
+      return host?.getAttribute('data-verdct-badge') ?? '';
+    }),
     readyState: document.readyState,
     rowCount: document.querySelectorAll('#class-results .class-accordion').length,
     instructorCount: document.querySelectorAll('#class-results .class-accordion .class-results-cell.instructor').length,
@@ -214,6 +221,22 @@ try {
   }
 
   const finalState = await readBadgeState(connection, sessionId);
+
+  // The reference page lists many distinct professors, so exactly one course
+  // group should win and every winning row should carry its explanatory chip.
+  if (!finalState.bestRowCount) {
+    throw new Error(
+      `No best section was highlighted: ${JSON.stringify({
+        bestRowCount: finalState.bestRowCount,
+        ratedBadges: finalState.ratedBadges.length,
+      })}`,
+    );
+  }
+  if (finalState.bestLabelled !== finalState.bestRowCount) {
+    throw new Error(
+      `A highlighted row is missing its "Best rated" label: ${JSON.stringify(finalState)}`,
+    );
+  }
   const toneBreakdown = finalState.resolvedBadges.reduce((totals, badge) => {
     totals[badge.tone] = (totals[badge.tone] ?? 0) + 1;
     return totals;
@@ -243,6 +266,8 @@ try {
     badgeCount: finalState.badgeCount,
     unresolvedBadges: finalState.badgeCount - finalState.resolvedBadges.length,
     toneBreakdown,
+    bestRowCount: finalState.bestRowCount,
+    bestProfessors: [...new Set(finalState.bestProfessors)],
     sampleBadges: finalState.ratedBadges.slice(0, 5),
     mutationObserved,
     browserErrors: browserErrors.length,

@@ -6,6 +6,7 @@ import type {
   ProfessorRating,
 } from '../shared/types';
 import { configureBadges, isVerdctNode, upsertBadge, type BadgeState } from './badgeRenderer';
+import { evaluateBestSections, recordSection } from './bestSection';
 import { scanClassSections, type ScannedClassSection } from './domScanner';
 
 const RESCAN_DELAY_MS = 100;
@@ -72,6 +73,8 @@ function renderSection(section: ScannedClassSection): void {
     // The row can be replaced while the lookup is in flight; skip detached nodes.
     if (!section.instructorElement.isConnected) return;
     upsertBadge(section, state);
+    recordSection(section, state);
+    evaluateBestSections();
   });
 }
 
@@ -82,6 +85,10 @@ function scanAndRender(): void {
   for (const section of scanClassSections()) {
     renderSection(section);
   }
+
+  // Newly scanned rows change which section wins, even when every rating for
+  // them was already resolved and cached.
+  evaluateBestSections();
 
   const elapsed = performance.now() - started;
   if (elapsed > 50) {

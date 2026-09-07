@@ -1,13 +1,13 @@
+import {
+  VERDCT_BADGE_ATTRIBUTE,
+  VERDCT_INJECTED_SELECTOR,
+  VERDCT_POPOVER_ATTRIBUTE,
+} from '../shared/constants';
 import { DEFAULT_SETTINGS } from '../shared/settings';
 import type { ProfessorRating, VerdctSettings } from '../shared/types';
 import type { ScannedClassSection } from './domScanner';
 
-/**
- * Marks every element Verdct injects. The content script uses it to ignore its
- * own DOM mutations, so rendering a badge cannot retrigger a page scan.
- */
-export const VERDCT_BADGE_ATTRIBUTE = 'data-verdct-badge';
-export const VERDCT_POPOVER_ATTRIBUTE = 'data-verdct-popover-layer';
+export { VERDCT_BADGE_ATTRIBUTE, VERDCT_POPOVER_ATTRIBUTE };
 
 /**
  * Below this many ratings the average is noise as much as signal, so the badge
@@ -511,7 +511,7 @@ export function upsertBadge(section: ScannedClassSection, state: BadgeState): vo
 /** True when a node belongs to Verdct's own injected DOM. */
 export function isVerdctNode(node: Node): boolean {
   const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
-  return Boolean(element?.closest(`[${VERDCT_BADGE_ATTRIBUTE}], [${VERDCT_POPOVER_ATTRIBUTE}]`));
+  return Boolean(element?.closest(VERDCT_INJECTED_SELECTOR));
 }
 
 export function resetBadgeRendererForTests(): void {

@@ -17,3 +17,17 @@ export const SETTINGS_STORAGE_KEY = 'verdct:settings';
 /** Ratings at or above this score render green; below GOOD, at or above FAIR renders yellow. */
 export const DEFAULT_GOOD_RATING_THRESHOLD = 4;
 export const DEFAULT_FAIR_RATING_THRESHOLD = 2.5;
+
+/**
+ * Attributes marking DOM that Verdct injected. The content script matches
+ * against these to ignore its own mutations; a marker missing from
+ * VERDCT_INJECTED_SELECTOR causes a redundant rescan on every render, so keep
+ * the selector in step whenever a new injected element is added.
+ */
+export const VERDCT_BADGE_ATTRIBUTE = 'data-verdct-badge';
+export const VERDCT_POPOVER_ATTRIBUTE = 'data-verdct-popover-layer';
+export const VERDCT_BEST_ATTRIBUTE = 'data-verdct-best';
+export const VERDCT_BEST_CHIP_ATTRIBUTE = 'data-verdct-best-chip';
+
+export const VERDCT_INJECTED_SELECTOR =
+  `[${VERDCT_BADGE_ATTRIBUTE}], [${VERDCT_POPOVER_ATTRIBUTE}], [${VERDCT_BEST_CHIP_ATTRIBUTE}]`;

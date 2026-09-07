@@ -1,10 +1,11 @@
 import { upsertBadge, type BadgeState } from '../src/content/badgeRenderer';
+import { evaluateBestSections, recordSection } from '../src/content/bestSection';
 import type { ScannedClassSection } from '../src/content/domScanner';
 import type { ProfessorRating } from '../src/shared/types';
 
 function rating(overrides: Partial<ProfessorRating>): ProfessorRating {
-  return {
-    normalizedName: 'placeholder',
+  const merged: ProfessorRating = {
+    normalizedName: '',
     displayName: 'Placeholder',
     overallRating: 4,
     difficulty: 3,
@@ -14,6 +15,8 @@ function rating(overrides: Partial<ProfessorRating>): ProfessorRating {
     matchConfidence: 'high',
     ...overrides,
   };
+  // Distinct cache keys per professor, so best-section counting sees real choices.
+  return { ...merged, normalizedName: merged.normalizedName || merged.displayName.toLowerCase() };
 }
 
 /** Mirrors the real page's spread: mostly rated, a few unknown, a couple of edge cases. */
@@ -107,4 +110,7 @@ for (const scenario of scenarios) {
     instructorElement: instructor,
   };
   upsertBadge(section, scenario.state);
+  recordSection(section, scenario.state);
 }
+
+evaluateBestSections();

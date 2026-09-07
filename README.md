@@ -20,13 +20,17 @@ The MVP is complete and verified against the live ASU Class Search:
 - **Caching** — `src/background/cache.ts` stores aggregates in `chrome.storage.local` keyed by normalized name, with a 7-day TTL, a shorter 1-day TTL for no-match results, an LRU cap of 500 entries, and serialized writes. Identical in-flight lookups share one request, so a page listing the same professor eight times costs one fetch.
 - **Graceful degradation** — network failures, schema changes, corrupt cache records, and missing matches all fall back to a neutral gray badge. Nothing throws into ASU's page.
 
+## Phase 2 (in progress)
+
+- **Best-section highlight** — `src/content/bestSection.ts` groups rows by course and marks the section(s) taught by the highest-rated professor with a green accent and a "Best rated" label. Winning takes stronger evidence than a badge does: only high-confidence name matches with at least 5 ratings are eligible, so a 4.7 from 3 students never outranks a 4.5 from 200. A course showing only one rated professor is left unmarked, since there is no choice to make. Ties all win rather than picking arbitrarily.
+
 Only aggregate numbers are stored. No review text, reviewer data, or browsing activity is collected or transmitted.
 
 ## Verification
 
 | Command | What it proves |
 | --- | --- |
-| `npm test` | 52 unit tests across the scanner, matcher, RMP parser, cache, and badge renderer. |
+| `npm test` | 71 unit tests across the scanner, matcher, RMP parser, cache, and badge renderer. |
 | `npm run typecheck` | Strict TypeScript across all entry points. |
 | `npm run validate:chrome` | Loads the built extension in a disposable headless Chrome profile: the service worker starts, the popup renders without errors, a live RMP lookup succeeds, and a repeat lookup in ASU's `"Last, First"` format is served from cache without a second fetch. |
 | `npm run validate:asu` | Drives the live ASU Class Search and asserts every result row receives a badge that resolves out of its loading state, including a dynamically inserted row. |
@@ -35,7 +39,7 @@ Only aggregate numbers are stored. No review text, reviewer data, or browsing ac
 
 Set `CHROME_PATH` when Chrome is installed outside its default Windows location. `validate:asu` defaults to Fall 2026 MAT 243; set `ASU_TEST_URL` to target a different current result page.
 
-Latest `validate:asu` run: 17 of 17 rows badged, 0 unresolved, 0 page errors.
+Latest `validate:asu` run: 17 of 17 rows badged, 0 unresolved, 1 best section highlighted, 0 page errors.
 
 ## Known constraints
 
@@ -45,4 +49,4 @@ Latest `validate:asu` run: 17 of 17 rows badged, 0 unresolved, 0 page errors.
 
 ## Not yet built
 
-Phase 2 (best-section highlighting, quality-vs-difficulty scatter, trend arrows, popup settings for TTL and thresholds) and Phase 3 (sentiment tags, seat alerts, alternate-section recommender). The settings plumbing exists — `src/shared/settings.ts` is read by the background worker and applied live to open tabs via `chrome.storage.onChanged` — but the popup does not yet expose editing controls.
+The rest of Phase 2 (quality-vs-difficulty scatter, trend arrows, popup settings for TTL and thresholds) and Phase 3 (sentiment tags, seat alerts, alternate-section recommender). The settings plumbing exists — `src/shared/settings.ts` is read by the background worker and applied live to open tabs via `chrome.storage.onChanged` — but the popup does not yet expose editing controls.
