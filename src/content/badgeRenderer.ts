@@ -2,10 +2,11 @@ import {
   VERDCT_BADGE_ATTRIBUTE,
   VERDCT_INJECTED_SELECTOR,
   VERDCT_POPOVER_ATTRIBUTE,
+  professorUrl,
 } from '../shared/constants';
 import { toggleFavorite } from '../shared/favorites';
-import { EMBEDDED_TOKENS, FLOATING_TOKENS } from './theme';
 import { DEFAULT_SETTINGS } from '../shared/settings';
+import { EMBEDDED_TOKENS, FLOATING_TOKENS } from './theme';
 import type { ProfessorRating, ThemePreference, VerdctSettings } from '../shared/types';
 import type { ScannedClassSection } from './domScanner';
 
@@ -26,7 +27,9 @@ type BadgeTone = 'good' | 'fair' | 'poor' | 'unknown';
 
 interface BadgeHandle {
   professorName: string;
-  button: HTMLButtonElement;
+  /** An anchor rather than a button, so the browser's own "open in new tab",
+   *  middle-click and copy-link behaviours all work on it. */
+  button: HTMLAnchorElement;
   state: BadgeState;
 }
 
@@ -57,7 +60,7 @@ const BADGE_STYLES = `
   :host { all: initial; }
   ${EMBEDDED_TOKENS}
 
-  button {
+  a {
     all: unset;
     box-sizing: border-box;
     display: inline-flex;
@@ -82,8 +85,11 @@ const BADGE_STYLES = `
     transition: border-color 120ms ease, box-shadow 120ms ease;
   }
 
-  button:hover { border-color: var(--v-text-muted); box-shadow: 0 1px 4px var(--v-shadow); }
-  button:focus-visible { outline: 2px solid var(--v-text); outline-offset: 2px; }
+  a:hover { border-color: var(--v-text-muted); box-shadow: 0 1px 4px var(--v-shadow); }
+  a:focus-visible { outline: 2px solid var(--v-text); outline-offset: 2px; }
+  /* Only a badge that actually links anywhere claims to be clickable. */
+  a[href] { cursor: pointer; }
+  a[href]:hover { border-color: var(--v-text); }
 
   /* The only colour on the badge, small enough to read as a signal. */
   .dot {
@@ -96,7 +102,7 @@ const BADGE_STYLES = `
   .dot.fair { background: var(--v-fair); }
   .dot.poor { background: var(--v-poor); }
 
-  button.unknown {
+  a.unknown {
     background: transparent;
     border-style: dashed;
     border-color: var(--v-border-strong);
@@ -104,14 +110,14 @@ const BADGE_STYLES = `
     font-weight: 500;
   }
 
-  button.loading {
+  a.loading {
     background: var(--v-surface-sunken);
     color: var(--v-text-faint);
     animation: verdct-badge-pulse 1.4s ease-in-out infinite;
   }
 
   /* Few ratings: same reading, drawn provisionally. */
-  button[data-sample="low"] { border-style: dashed; }
+  a[data-sample="low"] { border-style: dashed; }
 
   .trend { font-size: 9px; font-weight: 700; line-height: 12px; color: var(--v-text-muted); }
   .trend.rising  { color: var(--v-good); }
@@ -135,7 +141,7 @@ const BADGE_STYLES = `
   }
 
   @media (prefers-reduced-motion: reduce) {
-    button { animation: none; transition: none; }
+    a { animation: none; transition: none; }
   }
 `;
 
@@ -547,7 +553,19 @@ function badgeLabel(state: BadgeState): BadgeLabel {
 function paintBadge(handle: BadgeHandle): void {
   const { text, marker, tone, lowSample, trend, aria } = badgeLabel(handle.state);
   handle.button.className = tone;
-  handle.button.setAttribute('aria-label', `${handle.professorName}: ${aria}`);
+
+  const legacyId = handle.state.status === 'ready' ? handle.state.rating.legacyId : null;
+  if (legacyId !== null) {
+    handle.button.href = professorUrl(legacyId);
+    handle.button.setAttribute(
+      'aria-label',
+      `${handle.professorName}: ${aria}. Opens RateMyProfessor in a new tab.`,
+    );
+  } else {
+    handle.button.removeAttribute('href');
+    handle.button.setAttribute('aria-label', `${handle.professorName}: ${aria}`);
+  }
+
   handle.button.replaceChildren();
 
   if (tone === 'good' || tone === 'fair' || tone === 'poor') {
@@ -606,8 +624,12 @@ function createHost(section: ScannedClassSection): BadgeHandle {
   const shadow = host.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = BADGE_STYLES;
-  const button = document.createElement('button');
-  button.type = 'button';
+  const button = document.createElement('a');
+  // Focusable even without an href, so keyboard users still reach the popover
+  // for a professor Verdct could not match.
+  button.tabIndex = 0;
+  button.rel = 'noopener noreferrer';
+  button.target = '_blank';
 
   shadow.append(style, button);
   insertHost(section, host);

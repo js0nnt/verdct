@@ -66,6 +66,9 @@ function parseEntry(value: unknown): CacheEntry | null {
       fetchedAt: rating.fetchedAt,
       matchConfidence: confidence,
       trend,
+      // Entries cached before links existed simply have no id, rather than
+      // being discarded and refetched.
+      legacyId: optionalNumber(rating.legacyId),
     },
     lastAccessedAt:
       typeof value.lastAccessedAt === 'number' && Number.isFinite(value.lastAccessedAt)

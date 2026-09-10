@@ -25,6 +25,7 @@ function rating(overrides: Partial<ProfessorRating> = {}): ProfessorRating {
     fetchedAt: 1_000,
     matchConfidence: 'high',
     trend: null,
+    legacyId: 477524,
     ...overrides,
   };
 }
@@ -43,14 +44,14 @@ function buildSection(professorName = 'Ada Lovelace'): ScannedClassSection {
   return { courseId: 'MAT 243', professorName, rowElement, instructorElement };
 }
 
-function badgeButton(section: ScannedClassSection, professorName: string): HTMLButtonElement {
+function badgeButton(section: ScannedClassSection, professorName: string): HTMLAnchorElement {
   const hosts = section.instructorElement.querySelectorAll<HTMLElement>(
     `[${VERDCT_BADGE_ATTRIBUTE}]`,
   );
   const host = [...hosts].find(
     (candidate) => candidate.getAttribute(VERDCT_BADGE_ATTRIBUTE) === professorName,
   )!;
-  return host.shadowRoot!.querySelector('button')!;
+  return host.shadowRoot!.querySelector('a')!;
 }
 
 describe('badge renderer', () => {
@@ -182,6 +183,45 @@ describe('badge renderer', () => {
     upsertBadge(section, { status: 'ready', rating: rating({ numRatings: 90 }) });
 
     expect(badgeButton(section, 'Ada Lovelace').dataset.sample).toBeUndefined();
+  });
+
+  it('links a matched professor to their RateMyProfessor page', () => {
+    const section = buildSection();
+    upsertBadge(section, { status: 'ready', rating: rating({ legacyId: 477524 }) });
+
+    const badge = badgeButton(section, 'Ada Lovelace');
+    expect(badge.getAttribute('href')).toBe('https://www.ratemyprofessors.com/professor/477524');
+    expect(badge.target).toBe('_blank');
+    // Opening a page in the user's session must not hand it a window opener.
+    expect(badge.rel).toContain('noopener');
+    expect(badge.getAttribute('aria-label')).toContain('new tab');
+  });
+
+  it('does not pretend to link when there is no professor to open', () => {
+    const section = buildSection();
+    upsertBadge(section, {
+      status: 'ready',
+      rating: rating({ matchConfidence: 'none', overallRating: null, numRatings: 0, legacyId: null }),
+    });
+
+    expect(badgeButton(section, 'Ada Lovelace').hasAttribute('href')).toBe(false);
+  });
+
+  it('drops a stale link when a badge is repainted without an id', () => {
+    const section = buildSection();
+    upsertBadge(section, { status: 'ready', rating: rating({ legacyId: 477524 }) });
+    expect(badgeButton(section, 'Ada Lovelace').hasAttribute('href')).toBe(true);
+
+    upsertBadge(section, { status: 'error', message: 'Rating lookup failed.' });
+
+    expect(badgeButton(section, 'Ada Lovelace').hasAttribute('href')).toBe(false);
+  });
+
+  it('stays focusable without an href so keyboard users still get the popover', () => {
+    const section = buildSection();
+    upsertBadge(section, { status: 'loading' });
+
+    expect(badgeButton(section, 'Ada Lovelace').tabIndex).toBe(0);
   });
 
   it('repaints open badges when thresholds change', () => {

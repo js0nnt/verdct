@@ -16,8 +16,25 @@ export const TAB_DATA_KEY_PREFIX = 'verdct:tab:';
 /** Below this, the badges already make the comparison and a chart adds nothing. */
 export const MIN_POINTS_TO_COMPARE = 3;
 export const RMP_GRAPHQL_ENDPOINT = 'https://www.ratemyprofessors.com/graphql';
+
+/** Verified against legacyId 477524, which resolves to the ASU professor page. */
+export function professorUrl(legacyId: number): string {
+  return `https://www.ratemyprofessors.com/professor/${legacyId}`;
+}
 export const ASU_RMP_SCHOOL_ID = 'U2Nob29sLTE1NzIz';
-export const MINIMUM_RMP_REQUEST_INTERVAL_MS = 750;
+/**
+ * Spacing between the *starts* of RMP requests. Combined with the concurrency
+ * cap below this bounds the burst rate; a full results page is a short burst
+ * once a week per professor, since everything is cached afterwards.
+ */
+export const MINIMUM_RMP_REQUEST_INTERVAL_MS = 120;
+
+/**
+ * How many RMP requests may be in flight at once. Strict serialization made a
+ * cold page take ~16s: seventeen rows resolve to sixteen requests, and each one
+ * waited for the previous to finish before its delay even started.
+ */
+export const MAX_CONCURRENT_RMP_REQUESTS = 4;
 
 export const CACHE_STORAGE_KEY = 'verdct:ratings';
 export const SETTINGS_STORAGE_KEY = 'verdct:settings';

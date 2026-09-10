@@ -62,6 +62,7 @@ describe('matchTeacherCandidates', () => {
     const candidates = parseTeacherCandidates(validPayload);
     expect(matchTeacherCandidates('Mohacsy, H.', candidates, 1234)).toEqual({
       teacherId: 'VGVhY2hlci00Nzc1MjQ=',
+      legacyId: 477524,
       normalizedName: 'h mohacsy',
       displayName: 'Hedvig Mohacsy',
       overallRating: 3.5,

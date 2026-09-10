@@ -16,6 +16,8 @@ export interface ProfessorRating {
   matchConfidence: 'high' | 'low' | 'none';
   /** null when there were too few reviews to say anything. */
   trend: RatingTrend | null;
+  /** RateMyProfessor's numeric id, used to link straight to their page. */
+  legacyId: number | null;
 }
 
 export interface LookupProfessorMessage {

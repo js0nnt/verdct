@@ -1,8 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Verdct",
-  "description": "See professor ratings while browsing ASU Class Search.",
+  "description": "See RateMyProfessor ratings inline on ASU Class Search: quality, difficulty, and trend on every section.",
   "version": "0.1.0",
+  "icons": {
+    "16": "public/icons/icon-16.png",
+    "32": "public/icons/icon-32.png",
+    "48": "public/icons/icon-48.png",
+    "128": "public/icons/icon-128.png"
+  },
   "permissions": [
     "storage"
   ],
@@ -15,7 +21,13 @@
   },
   "action": {
     "default_title": "Verdct",
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "public/icons/icon-16.png",
+      "32": "public/icons/icon-32.png",
+      "48": "public/icons/icon-48.png",
+      "128": "public/icons/icon-128.png"
+    }
   },
   "content_scripts": [
     {

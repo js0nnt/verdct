@@ -103,11 +103,13 @@ function createPipeConnection() {
 const BADGE_STATE_EXPRESSION = `(() => {
   const hosts = [...document.querySelectorAll('[data-verdct-badge]')];
   const badges = hosts.map((host) => {
-    const button = host.shadowRoot?.querySelector('button');
+    // The badge is an anchor so it links to the professor's RMP page.
+    const badge = host.shadowRoot?.querySelector('a');
     return {
       professor: host.getAttribute('data-verdct-badge'),
-      tone: button?.className ?? 'no-shadow-root',
-      text: button?.textContent ?? '',
+      tone: badge?.className ?? 'no-shadow-root',
+      text: badge?.textContent ?? '',
+      href: badge?.getAttribute('href') ?? '',
     };
   });
   const bestRows = [...document.querySelectorAll('[data-verdct-best="true"]')];
@@ -153,6 +155,7 @@ try {
   await connection.send('Runtime.enable', {}, sessionId);
   await connection.send('Log.enable', {}, sessionId);
   await connection.send('Page.enable', {}, sessionId);
+  const navigationStartedAt = Date.now();
   await connection.send('Page.navigate', { url: asuUrl }, sessionId);
 
   // Live RMP lookups are throttled, so allow generous time for the first batch
@@ -170,6 +173,9 @@ try {
     }
     await delay(200);
   }
+
+  // Cold-cache wall clock: the profile is disposable, so nothing is cached.
+  const secondsToAllBadges = Number(((Date.now() - navigationStartedAt) / 1000).toFixed(1));
 
   if (!pageState?.rowCount) {
     throw new Error(`Verdct found no live ASU rows: ${JSON.stringify(pageState)}`);
@@ -277,10 +283,16 @@ try {
 
   // The reference page lists many distinct professors, so exactly one course
   // group should win and every winning row should carry its explanatory chip.
+  const unlinked = finalState.ratedBadges.filter((badge) => !badge.href.includes('/professor/'));
+  if (unlinked.length > 0) {
+    throw new Error(`Rated badges are missing their RMP link: ${JSON.stringify(unlinked)}`);
+  }
+
   if (!finalState.bestRowCount) {
     throw new Error(
       `No best section was highlighted: ${JSON.stringify({
         trendArrows: finalState.ratedBadges.filter((badge) => /[▲▼]/.test(badge.text)).length,
+    linkedBadges: finalState.ratedBadges.filter((badge) => badge.href.includes('/professor/')).length,
     reportedCourses: reported.courses,
     toolbarBadge: reported.badgeText,
     bestRowCount: finalState.bestRowCount,
@@ -316,6 +328,7 @@ try {
 
   console.log(JSON.stringify({
     url: asuUrl,
+    secondsToAllBadges,
     rowCount: pageState.rowCount,
     instructorCount: pageState.instructorCount,
     sampleCourse: pageState.sampleCourse,
@@ -323,6 +336,7 @@ try {
     unresolvedBadges: finalState.badgeCount - finalState.resolvedBadges.length,
     toneBreakdown,
     trendArrows: finalState.ratedBadges.filter((badge) => /[▲▼]/.test(badge.text)).length,
+    linkedBadges: finalState.ratedBadges.filter((badge) => badge.href.includes('/professor/')).length,
     reportedCourses: reported.courses,
     toolbarBadge: reported.badgeText,
     bestRowCount: finalState.bestRowCount,

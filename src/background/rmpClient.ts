@@ -1,5 +1,6 @@
 import {
   ASU_RMP_SCHOOL_ID,
+  MAX_CONCURRENT_RMP_REQUESTS,
   MINIMUM_RMP_REQUEST_INTERVAL_MS,
   RMP_GRAPHQL_ENDPOINT,
 } from '../shared/constants';
@@ -79,8 +80,9 @@ const TEACHER_RATINGS_QUERY = `
   }
 `;
 
-let requestQueue: Promise<unknown> = Promise.resolve();
+let activeRequests = 0;
 let nextRequestAllowedAt = 0;
+const waitingForSlot: Array<() => void> = [];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -152,6 +154,7 @@ function noMatchRating(professorName: string, fetchedAt: number): ProfessorRatin
     fetchedAt,
     matchConfidence: 'none',
     trend: null,
+    legacyId: null,
   };
 }
 
@@ -176,20 +179,41 @@ export function matchTeacherCandidates(
     fetchedAt,
     matchConfidence: match.confidence,
     trend: null,
+    legacyId: candidate.legacyId,
   };
 }
 
-function enqueueRequest<T>(task: () => Promise<T>, minimumDelayMs: number): Promise<T> {
-  const scheduled = requestQueue.catch(() => undefined).then(async () => {
-    const waitMs = Math.max(0, nextRequestAllowedAt - Date.now());
-    if (waitMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, waitMs));
-    }
-    nextRequestAllowedAt = Date.now() + minimumDelayMs;
-    return task();
-  });
-  requestQueue = scheduled;
-  return scheduled;
+function releaseSlot(): void {
+  activeRequests -= 1;
+  waitingForSlot.shift()?.();
+}
+
+/**
+ * Bounded concurrency rather than a single file. `while` rather than `if`,
+ * because several callers can be woken before any of them takes its slot.
+ */
+async function acquireSlot(minimumDelayMs: number): Promise<void> {
+  while (activeRequests >= MAX_CONCURRENT_RMP_REQUESTS) {
+    await new Promise<void>((resolve) => waitingForSlot.push(resolve));
+  }
+  activeRequests += 1;
+
+  const waitMs = Math.max(0, nextRequestAllowedAt - Date.now());
+  if (waitMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+  nextRequestAllowedAt = Date.now() + minimumDelayMs;
+}
+
+async function enqueueRequest<T>(task: () => Promise<T>, minimumDelayMs: number): Promise<T> {
+  await acquireSlot(minimumDelayMs);
+  try {
+    return await task();
+  } finally {
+    // Released even when the task throws, or one failure would leak a slot and
+    // eventually stall every remaining lookup.
+    releaseSlot();
+  }
 }
 
 async function postGraphql(
