@@ -5,7 +5,11 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const extensionDirectory = path.join(projectRoot, 'dist');
+// Defaults to the local build; point it at an unpacked release archive to
+// prove the artifact people actually download is loadable.
+const extensionDirectory = process.env.VERDCT_EXTENSION_DIR
+  ? path.resolve(process.env.VERDCT_EXTENSION_DIR)
+  : path.join(projectRoot, 'dist');
 const chromePath = process.env.CHROME_PATH ??
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const profileDirectory = await mkdtemp(path.join(projectRoot, '.tmp-chrome-'));

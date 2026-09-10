@@ -2,12 +2,29 @@
 
 Verdct is a Manifest V3 Chrome extension that shows RateMyProfessor summaries directly in ASU Class Search.
 
-## Install (unpacked)
+## Install
 
-1. Install dependencies with `npm install`.
-2. Build the unpacked extension with `npm run build`.
-3. Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select the generated `dist` directory.
-4. Open ASU Class Search and run a course search. A colored badge appears next to each instructor.
+### Just want to use it
+
+1. Download `verdct-<version>.zip` from [Releases](https://github.com/js0nnt/verdct/releases) and unzip it.
+2. Open `chrome://extensions` and enable **Developer mode** (top right).
+3. Click **Load unpacked** and select the unzipped folder.
+4. Open [ASU Class Search](https://catalog.apps.asu.edu/catalog/classes) and run a course search. A badge appears next to each instructor.
+
+No Node.js needed — the release archive is already built.
+
+### Build from source
+
+Requires Node.js 20+.
+
+```bash
+npm install
+npm run build     # outputs dist/
+```
+
+Then load `dist/` via **Load unpacked** as above. `npm run package` builds and zips it into a release archive.
+
+`dist/` is intentionally not committed. It is generated output, and a checked-in copy silently goes stale the moment someone edits source without rebuilding — leaving anyone who cloned the repo running code that does not match it. Releases are built from a known commit instead, and `npm run validate:chrome` can be pointed at an unpacked archive with `VERDCT_EXTENSION_DIR` to prove the artifact people actually download is the one that works.
 
 ## Phase 1 (shipped)
 
@@ -47,6 +64,7 @@ Only aggregate numbers are stored. No review text, reviewer data, or browsing ac
 | `npm run typecheck` | Strict TypeScript across all entry points. |
 | `npm run validate:chrome` | Loads the built extension in a disposable headless Chrome profile: the service worker starts, the popup renders without errors, a live RMP lookup succeeds, and a repeat lookup in ASU's `"Last, First"` format is served from cache without a second fetch, the settings controls render, and a saved favorite is listed with the rating joined from cache, the Settings tab renders its controls, the theme override beats the OS setting, and the Overview chart plots every seeded professor. Set `VERDCT_SCREENSHOT=<path>` to capture the popup for design review. |
 | `npm run validate:asu` | Drives the live ASU Class Search and asserts every result row receives a badge that resolves out of its loading state, including a dynamically inserted row. |
+| `npm run package` | Builds and zips the extension into `verdct-<version>.zip` for a GitHub Release. Set `VERDCT_EXTENSION_DIR` on `validate:chrome` to verify the unpacked archive itself loads. |
 | `npm run preview:badges` | Opens a design harness at `localhost:5199` rendering the real badge module against mock ASU rows in every state — rated, provisional, unmatched, loading, failed. Use it to iterate on badge styling without a live search. |
 | `npm run inspect:rmp` | Reproduces the first-party GraphQL request inspection used to maintain the RMP client when its undocumented schema changes. |
 

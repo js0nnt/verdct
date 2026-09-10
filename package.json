@@ -7,6 +7,7 @@
     "dev": "vite",
     "preview:badges": "vite --config vite.config.preview.ts",
     "build": "tsc --noEmit && vite build",
+    "package": "npm run build && node scripts/package.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "validate:chrome": "node scripts/validate-chrome.mjs",
