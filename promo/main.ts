@@ -63,8 +63,13 @@ const SCATTER: Record<string, ScatterPoint[]> = {
   })),
 };
 
-const shot = new URLSearchParams(location.search).get('shot') ?? '1';
-const dark = new URLSearchParams(location.search).get('dark') === '1';
+const params = new URLSearchParams(location.search);
+const shot = params.get('shot') ?? '1';
+const dark = params.get('dark') === '1';
+
+// The store asks for several canvas sizes; the layout follows whatever it is told.
+document.documentElement.style.setProperty('--w', `${params.get('w') ?? 1280}px`);
+document.documentElement.style.setProperty('--h', `${params.get('h') ?? 800}px`);
 
 
 installChromeShim({
@@ -217,7 +222,102 @@ function callouts(items: Array<[string, string]>): HTMLElement {
   return wrap;
 }
 
+/** A sample badge, drawn to the tile's own scale rather than the page's. */
+function tileChip(name: string, score: string, color: string, size: number): HTMLElement {
+  const chip = el('div', 'chip');
+  chip.style.fontSize = `${size}px`;
+  const dot = el('i');
+  dot.style.background = color;
+  chip.append(el('span', 'nm', name), dot, document.createTextNode(score));
+  return chip;
+}
+
+function tileMark(glyphSize: number, fontSize: number): HTMLElement {
+  const mark = el('div', 'mark');
+  const glyph = el('div', 'glyph');
+  glyph.style.width = `${glyphSize}px`;
+  glyph.style.height = `${glyphSize}px`;
+  const word = el('span', '', 'Verdct');
+  word.style.fontSize = `${fontSize}px`;
+  mark.append(glyph, word);
+  return mark;
+}
+
+/** 440x280. Small enough that only the mark and one claim fit. */
+function smallTile(): HTMLElement {
+  const tile = el('div', 'tile');
+  tile.style.flexDirection = 'column';
+  tile.style.justifyContent = 'space-between';
+  tile.style.padding = '30px 32px';
+
+  const heading = el('h2', '', 'Professor ratings, inside Class Search.');
+  heading.style.fontSize = '25px';
+  heading.style.maxWidth = '16ch';
+
+  const chips = el('div', 'chips');
+  chips.append(tileChip('Raman', '4.4', '#1f9d63', 15), tileChip('Feld', '3.4', '#c47f10', 15));
+
+  tile.append(tileMark(30, 20), heading, chips);
+  return tile;
+}
+
+/** 1400x560. Room for the claim and a glimpse of the thing itself. */
+function marqueeTile(): HTMLElement {
+  const tile = el('div', 'tile');
+  tile.style.alignItems = 'center';
+  tile.style.padding = '0 86px';
+  tile.style.gap = '70px';
+
+  const left = el('div');
+  left.style.flex = '1';
+
+  const heading = el('h2', '', 'See the verdict before you register.');
+  heading.style.fontSize = '52px';
+  heading.style.margin = '26px 0 0';
+  heading.style.maxWidth = '17ch';
+
+  const sub = el(
+    'p',
+    '',
+    'RateMyProfessor scores, difficulty and rating trends on every ASU section — without opening a second tab.',
+  );
+  sub.style.fontSize = '19px';
+  sub.style.marginTop = '18px';
+  sub.style.maxWidth = '46ch';
+
+  left.append(tileMark(38, 25), heading, sub);
+
+  const right = el('div');
+  right.style.display = 'flex';
+  right.style.flexDirection = 'column';
+  right.style.gap = '14px';
+  right.style.flex = 'none';
+
+  const samples: Array<[string, string, string]> = [
+    ['Adrian Moss', '4.7', '#1f9d63'],
+    ['Priya Raman', '4.4', '#1f9d63'],
+    ['Elena Vasquez', '4.3', '#1f9d63'],
+    ['Marcus Feld', '3.4', '#c47f10'],
+    ['Iris Delgado', '2.2', '#d24b45'],
+  ];
+  for (const [name, score, color] of samples) {
+    const chip = tileChip(name, score, color, 19);
+    chip.style.padding = '11px 18px';
+    chip.style.justifyContent = 'space-between';
+    chip.style.minWidth = '250px';
+    right.append(chip);
+  }
+
+  tile.append(left, right);
+  return tile;
+}
+
 async function render(): Promise<void> {
+  if (shot === 'small' || shot === 'marquee') {
+    stage.append(shot === 'small' ? smallTile() : marqueeTile());
+    return;
+  }
+
   const root = el('div', dark ? 'stage dark' : 'stage');
   stage.append(root);
   // Named so nobody reads these as real instructors' scores.

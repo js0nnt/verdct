@@ -1,5 +1,6 @@
 /**
- * Captures Chrome Web Store screenshots at exactly 1280x800.
+ * Captures the Chrome Web Store listing assets: four 1280x800 screenshots plus
+ * the 440x280 and 1400x560 promo tiles.
  *
  * The pages under promo/ mount the real badge renderer and the real popup, so
  * what ends up in the store listing is the shipping UI rather than a mockup.
@@ -25,6 +26,12 @@ const SHOTS = [
   { name: '02-hover-detail', query: 'shot=2' },
   { name: '03-compare-sections', query: 'shot=3' },
   { name: '04-settings-dark', query: 'shot=4&dark=1', scheme: 'dark' },
+  // Promo tiles. The store rejects an alpha channel on these; JPEG cannot carry
+  // one at all, so the constraint is satisfied by construction. (Chrome's PNG
+  // capture of an opaque page comes out RGB rather than RGBA anyway — verified
+  // colour type 2 — but JPEG removes the question and is smaller here.)
+  { name: 'tile-small-440x280', query: 'shot=small&w=440&h=280', width: 440, height: 280, format: 'jpeg' },
+  { name: 'tile-marquee-1400x560', query: 'shot=marquee&w=1400&h=560', width: 1400, height: 560, format: 'jpeg' },
 ];
 
 await access(chromePath);
@@ -100,16 +107,19 @@ try {
   await connection.send('Page.enable', {}, sessionId);
   await connection.send('Runtime.enable', {}, sessionId);
 
-  // Pinned so the output is exactly the size the store requires, whatever the
-  // host window manager decides to do.
-  await connection.send('Emulation.setDeviceMetricsOverride', {
-    width: WIDTH,
-    height: HEIGHT,
-    deviceScaleFactor: 1,
-    mobile: false,
-  }, sessionId);
-
   for (const shot of SHOTS) {
+    const width = shot.width ?? WIDTH;
+    const height = shot.height ?? HEIGHT;
+
+    // Pinned so the output is exactly the size the store requires, whatever the
+    // host window manager decides to do.
+    await connection.send('Emulation.setDeviceMetricsOverride', {
+      width,
+      height,
+      deviceScaleFactor: 1,
+      mobile: false,
+    }, sessionId);
+
     // Headless Chrome's default scheme varies; pin it so the popup and the
     // surrounding page never disagree.
     await connection.send('Emulation.setEmulatedMedia', {
@@ -120,7 +130,7 @@ try {
     let ready = false;
     for (let attempt = 0; attempt < 60; attempt += 1) {
       const evaluation = await connection.send('Runtime.evaluate', {
-        expression: `document.body.dataset.ready === 'true' && document.querySelectorAll('[data-verdct-badge], .popup-frame').length > 0`,
+        expression: `document.body.dataset.ready === 'true' && document.querySelectorAll('[data-verdct-badge], .popup-frame, .tile').length > 0`,
         returnByValue: true,
       }, sessionId);
       if (evaluation.result?.value) { ready = true; break; }
@@ -136,18 +146,25 @@ try {
     }, sessionId);
     await delay(600);
 
+    const format = shot.format ?? 'png';
     const image = await connection.send('Page.captureScreenshot', {
-      format: 'png',
+      format,
+      // High enough that small UI text stays crisp.
+      ...(format === 'jpeg' ? { quality: 95 } : {}),
       captureBeyondViewport: false,
-      clip: { x: 0, y: 0, width: WIDTH, height: HEIGHT, scale: 1 },
+      clip: { x: 0, y: 0, width, height, scale: 1 },
     }, sessionId);
 
-    const file = path.join(outDir, `${shot.name}.png`);
+    const file = path.join(outDir, `${shot.name}.${format === 'jpeg' ? 'jpg' : 'png'}`);
     await writeFile(file, Buffer.from(image.data, 'base64'));
-    captured.push({ file: path.basename(file), bytes: Buffer.from(image.data, 'base64').length });
+    captured.push({
+      file: path.basename(file),
+      size: `${width}x${height}`,
+      bytes: Buffer.from(image.data, 'base64').length,
+    });
   }
 
-  console.log(JSON.stringify({ size: `${WIDTH}x${HEIGHT}`, outDir, captured }, null, 2));
+  console.log(JSON.stringify({ outDir, captured }, null, 2));
 } finally {
   connection.close();
   if (chromeProcess.exitCode === null) {
