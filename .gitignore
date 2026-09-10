@@ -9,3 +9,6 @@ verdct-*.zip
 
 # Design-review captures.
 *.png.local
+
+# Generated store assets.
+promo-out/
