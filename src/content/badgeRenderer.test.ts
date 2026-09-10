@@ -54,6 +54,18 @@ function badgeButton(section: ScannedClassSection, professorName: string): HTMLA
   return host.shadowRoot!.querySelector('a')!;
 }
 
+function hoverBadge(section: ScannedClassSection, professorName: string): void {
+  badgeButton(section, professorName).dispatchEvent(new MouseEvent('mouseenter'));
+}
+
+function popoverText(): string {
+  return (
+    document
+      .querySelector('[data-verdct-popover-layer]')
+      ?.shadowRoot?.querySelector('.popover')?.textContent ?? ''
+  );
+}
+
 describe('badge renderer', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
@@ -185,6 +197,26 @@ describe('badge renderer', () => {
     upsertBadge(section, { status: 'ready', rating: rating({ overallRating: 4.4, numRatings: 40 }) });
 
     expect(badgeButton(section, 'Ada Lovelace').textContent).toBe('4.4');
+  });
+
+  it('states the thin sample plainly, with nothing about award rules', () => {
+    const section = buildSection();
+    upsertBadge(section, { status: 'ready', rating: rating({ numRatings: 3 }) });
+    hoverBadge(section, 'Ada Lovelace');
+
+    const note = popoverText();
+    expect(note).toContain('Only 3 ratings — treat as provisional.');
+    // Award eligibility changed once already and left this line stating a rule
+    // that no longer existed; it should not describe one at all.
+    expect(note).not.toMatch(/best (rated|overall)/i);
+  });
+
+  it('uses the singular for a lone rating', () => {
+    const section = buildSection();
+    upsertBadge(section, { status: 'ready', rating: rating({ numRatings: 1 }) });
+    hoverBadge(section, 'Ada Lovelace');
+
+    expect(popoverText()).toContain('Only 1 rating — treat as provisional.');
   });
 
   it('does not mark a well-sampled badge provisional', () => {

@@ -464,9 +464,10 @@ function popoverContent(state: BadgeState, professorName: string): DocumentFragm
       element(
         'span',
         'why',
+        // No thin-sample caveat here: the provisional note sits directly below
+        // in the same panel and would repeat the count word for word.
         kind === 'rated'
-          ? `Highest rating in ${award!.courseId}, before difficulty.` +
-            (award!.thinSample ? ` Based on only ${award!.thinSample} ratings.` : '')
+          ? `Highest rating in ${award!.courseId}, before difficulty.`
           : `Best rating-to-difficulty balance in ${award!.courseId}.`,
       ),
     );
@@ -476,9 +477,7 @@ function popoverContent(state: BadgeState, professorName: string): DocumentFragm
   const notes: string[] = [];
   if (rating.numRatings < LOW_SAMPLE_RATING_COUNT) {
     notes.push(
-      `Only ${rating.numRatings} rating${rating.numRatings === 1 ? '' : 's'} — treat as provisional.` +
-        ` Still counts for Best rated, but needs ${LOW_SAMPLE_RATING_COUNT} to be considered` +
-        ' for Best overall.',
+      `Only ${rating.numRatings} rating${rating.numRatings === 1 ? '' : 's'} — treat as provisional.`,
     );
   }
   if (rating.matchConfidence === 'low') {
