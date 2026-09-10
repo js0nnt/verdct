@@ -11,7 +11,8 @@ import {
   awardExplanation,
   difficultyAdjustedScore,
   evaluateBestSections,
-  isEligibleToWin,
+  isEligibleForOverall,
+  isEligibleForRated,
   recordSection,
   resetBestSectionsForTests,
 } from './bestSection';
@@ -111,16 +112,39 @@ describe('best section highlighting', () => {
     expect(isBest(second)).toBe(false);
   });
 
-  it('never lets a thinly-rated professor win', () => {
+  it('gives best rated to the highest score even on few reviews', () => {
     const thin = addRow('MAT 243', ready({ normalizedName: 'a', overallRating: 4.9, numRatings: 3 }));
     const solid = addRow('MAT 243', ready({ normalizedName: 'b', overallRating: 4.2, numRatings: 200 }));
-    const third = addRow('MAT 243', ready({ normalizedName: 'c', overallRating: 3.1 }));
+    addRow('MAT 243', ready({ normalizedName: 'c', overallRating: 3.1 }));
 
     evaluateBestSections();
 
-    expect(isBest(thin)).toBe(false);
-    expect(isBest(solid)).toBe(true);
-    expect(isBest(third)).toBe(false);
+    // Highest is a fact; it stays true however few reviews back it.
+    expect(awardsOn(thin)).toEqual(['rated']);
+    // The recommendation still needs evidence behind it.
+    expect(awardsOn(solid)).toEqual(['overall']);
+  });
+
+  it('says on hover when the top rating rests on few reviews', () => {
+    const thin = addRow('MAT 243', ready({ normalizedName: 'a', overallRating: 4.9, numRatings: 3 }));
+    addRow('MAT 243', ready({ normalizedName: 'b', overallRating: 4.2, numRatings: 200 }));
+    evaluateBestSections();
+
+    const chip = thin.querySelector(`[${VERDCT_BEST_CHIP_ATTRIBUTE}="rated"]`)!;
+    expect(chip.shadowRoot!.querySelector('span.chip')!.getAttribute('title')).toMatch(
+      /only 3 ratings/i,
+    );
+  });
+
+  it('leaves the caveat off a well-reviewed best rated', () => {
+    const solid = addRow('MAT 243', ready({ normalizedName: 'a', overallRating: 4.9, numRatings: 90 }));
+    addRow('MAT 243', ready({ normalizedName: 'b', overallRating: 4.2, numRatings: 200 }));
+    evaluateBestSections();
+
+    const chip = solid.querySelector(`[${VERDCT_BEST_CHIP_ATTRIBUTE}="rated"]`)!;
+    expect(chip.shadowRoot!.querySelector('span.chip')!.getAttribute('title')).not.toMatch(
+      /only \d+ rating/i,
+    );
   });
 
   it('never lets an approximate name match win', () => {
@@ -238,8 +262,9 @@ describe('best section highlighting', () => {
     expect(awardsOn(clear).sort()).toEqual(['overall', 'rated']);
   });
 
-  it('does not award a higher score that is too thinly reviewed', () => {
-    // The real case: a 4.7 from 3 students against a 4.4 from 5.
+  it('splits the awards on the reported real-world case', () => {
+    // A 4.7 from 3 students against a 4.4 from 5: the first is genuinely the
+    // highest, the second is the safer recommendation.
     const thin = addRow(
       'MAT 243',
       ready({ normalizedName: 'a', overallRating: 4.7, difficulty: 3.7, numRatings: 3 }),
@@ -252,14 +277,14 @@ describe('best section highlighting', () => {
 
     evaluateBestSections();
 
-    expect(awardsOn(thin)).toEqual([]);
-    expect(awardsOn(supported).sort()).toEqual(['overall', 'rated']);
+    expect(awardsOn(thin)).toEqual(['rated']);
+    expect(awardsOn(supported)).toEqual(['overall']);
   });
 
-  it('states the ratings bar, so passing over a higher score is explicable', () => {
-    // Without this the award reads as simply wrong beside a bigger number.
-    expect(awardExplanation('rated', 'MAT 243')).toMatch(/at least 5 ratings/i);
+  it('states the ratings bar on the recommendation only', () => {
     expect(awardExplanation('overall', 'MAT 243')).toMatch(/at least 5 ratings/i);
+    // Best rated has no floor now, so it must not claim one.
+    expect(awardExplanation('rated', 'MAT 243')).not.toMatch(/at least 5 ratings/i);
   });
 
   it('explains each award in terms a reader can check', () => {
@@ -374,15 +399,29 @@ describe('best section highlighting', () => {
     });
   });
 
-  describe('isEligibleToWin', () => {
+  describe('eligibility', () => {
     it.each([
-      ['a solid high-confidence rating', { }, true],
-      ['too few ratings', { numRatings: 4 }, false],
+      ['a solid high-confidence rating', {}, true],
+      ['very few ratings', { numRatings: 2 }, true],
       ['an approximate name match', { matchConfidence: 'low' as const }, false],
       ['no match at all', { matchConfidence: 'none' as const, overallRating: null }, false],
       ['a listing with no score', { overallRating: null }, false],
-    ])('rejects or accepts %s', (_label, overrides, expected) => {
-      expect(isEligibleToWin(rating(overrides))).toBe(expected);
+    ])('best rated: %s', (_label, overrides, expected) => {
+      expect(isEligibleForRated(rating(overrides))).toBe(expected);
+    });
+
+    it.each([
+      ['a solid high-confidence rating', {}, true],
+      ['too few ratings', { numRatings: 4 }, false],
+      ['an approximate name match', { matchConfidence: 'low' as const }, false],
+    ])('best overall: %s', (_label, overrides, expected) => {
+      expect(isEligibleForOverall(rating(overrides))).toBe(expected);
+    });
+
+    it('never lets a guessed name carry either award', () => {
+      const guessed = rating({ matchConfidence: 'low', overallRating: 5 });
+      expect(isEligibleForRated(guessed)).toBe(false);
+      expect(isEligibleForOverall(guessed)).toBe(false);
     });
   });
 });

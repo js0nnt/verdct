@@ -17,6 +17,8 @@ export type AwardKind = 'rated' | 'overall';
 export interface AwardInfo {
   kinds: AwardKind[];
   courseId: string;
+  /** Set when the winning rating rests on very few reviews. */
+  thinSample: number | null;
 }
 
 /**
@@ -26,12 +28,16 @@ export interface AwardInfo {
 const MIN_DISTINCT_PROFESSORS = 2;
 
 /**
- * A rating must clear this many reviews to win. Without it a 4.7 from 3
- * students would outrank a 4.5 from 200, which is exactly the misleading
- * comparison the provisional badge treatment exists to prevent. Shared with the
- * badge so the two can never disagree about what counts as well-supported.
+ * The two awards answer different questions, so they take different evidence.
+ *
+ * "Best rated" is a statement of fact — this is the highest number in the
+ * course — and stays true however few reviews back it, so it has no floor. The
+ * badge shows the count inline and the hover says so when it is thin.
+ *
+ * "Best overall" is a recommendation, and staking one on three reviews is a
+ * different kind of claim, so it keeps the floor.
  */
-const MIN_RATINGS_TO_WIN = MIN_CONFIDENT_RATINGS;
+const MIN_RATINGS_FOR_OVERALL = MIN_CONFIDENT_RATINGS;
 
 /**
  * Rating alone says nothing about workload, so a demanding grader with devoted
@@ -51,13 +57,21 @@ export const AWARD_LABEL: Record<AwardKind, string> = {
   overall: 'Best overall',
 };
 
-export function awardExplanation(kind: AwardKind, courseId: string): string {
-  // Naming the bar matters: a higher score with too few reviews is passed over,
-  // and without saying so the award looks simply wrong next to it.
-  const bar = `Only professors with at least ${MIN_CONFIDENT_RATINGS} ratings are considered.`;
-  return kind === 'rated'
-    ? `Highest rating in ${courseId} among well-reviewed professors. Does not account for how hard the course is. ${bar}`
-    : `Best balance of rating and difficulty in ${courseId}. ${bar}`;
+export function awardExplanation(
+  kind: AwardKind,
+  courseId: string,
+  thinSample: number | null = null,
+): string {
+  if (kind === 'rated') {
+    const caveat = thinSample
+      ? ` Based on only ${thinSample} rating${thinSample === 1 ? '' : 's'}, so treat it with care.`
+      : '';
+    return `Highest rating in ${courseId}. Does not account for how hard the course is.${caveat}`;
+  }
+  return (
+    `Best balance of rating and difficulty in ${courseId}.` +
+    ` Only professors with at least ${MIN_RATINGS_FOR_OVERALL} ratings are considered.`
+  );
 }
 
 interface TrackedRow {
@@ -66,6 +80,8 @@ interface TrackedRow {
   instructorElement: HTMLElement;
   /** Best raw rating among the professors listed in this row. */
   ratingScore: number | null;
+  /** How many reviews back that best raw rating. */
+  ratingSample: number;
   /** Best difficulty-adjusted rating among them. */
   overallScore: number | null;
   /** Normalized names of eligible professors, for counting distinct choices. */
@@ -76,15 +92,16 @@ const trackedRows = new Map<HTMLElement, TrackedRow>();
 let styleInjected = false;
 
 /**
- * Only high-confidence, well-sampled ratings can win. A recommendation is a
- * stronger claim than a badge, so it takes stronger evidence.
+ * A guessed name must never carry an award, whichever kind, since the whole
+ * claim would be about the wrong person.
  */
-export function isEligibleToWin(rating: ProfessorRating): boolean {
-  return (
-    rating.matchConfidence === 'high' &&
-    rating.overallRating !== null &&
-    rating.numRatings >= MIN_RATINGS_TO_WIN
-  );
+export function isEligibleForRated(rating: ProfessorRating): boolean {
+  return rating.matchConfidence === 'high' && rating.overallRating !== null;
+}
+
+/** The recommendation additionally needs enough reviews to stand on. */
+export function isEligibleForOverall(rating: ProfessorRating): boolean {
+  return isEligibleForRated(rating) && rating.numRatings >= MIN_RATINGS_FOR_OVERALL;
 }
 
 /** Rating discounted by difficulty. Null when difficulty is unknown. */
@@ -127,17 +144,24 @@ export function recordSection(section: ScannedClassSection, state: BadgeState): 
         courseId: section.courseId,
         instructorElement: section.instructorElement,
         ratingScore: null,
+        ratingSample: 0,
         overallScore: null,
         professors: new Set(),
       };
 
-  if (rating && isEligibleToWin(rating)) {
-    row.ratingScore = Math.max(row.ratingScore ?? -Infinity, rating.overallRating!);
-    const adjusted = difficultyAdjustedScore(rating);
-    if (adjusted !== null) {
-      row.overallScore = Math.max(row.overallScore ?? -Infinity, adjusted);
+  if (rating && isEligibleForRated(rating)) {
+    if (rating.overallRating! > (row.ratingScore ?? -Infinity)) {
+      row.ratingScore = rating.overallRating!;
+      row.ratingSample = rating.numRatings;
     }
     row.professors.add(rating.normalizedName);
+
+    if (isEligibleForOverall(rating)) {
+      const adjusted = difficultyAdjustedScore(rating);
+      if (adjusted !== null) {
+        row.overallScore = Math.max(row.overallScore ?? -Infinity, adjusted);
+      }
+    }
   }
 
   trackedRows.set(section.rowElement, row);
@@ -171,7 +195,7 @@ const CHIP_STYLES = `
      greyed chip read as disabled rather than as the weaker of two claims. */
 `;
 
-function chipHost(kind: AwardKind, courseId: string): HTMLElement {
+function chipHost(kind: AwardKind, courseId: string, thinSample: number | null): HTMLElement {
   const host = document.createElement('span');
   host.setAttribute(VERDCT_BEST_CHIP_ATTRIBUTE, kind);
 
@@ -184,15 +208,16 @@ function chipHost(kind: AwardKind, courseId: string): HTMLElement {
   chip.textContent = AWARD_LABEL[kind];
   // Hovering the chip has to say what it actually means; "best" alone invites
   // the reading that it accounts for everything.
-  chip.title = awardExplanation(kind, courseId);
-  chip.setAttribute('aria-label', `${AWARD_LABEL[kind]}. ${awardExplanation(kind, courseId)}`);
+  const explanation = awardExplanation(kind, courseId, thinSample);
+  chip.title = explanation;
+  chip.setAttribute('aria-label', `${AWARD_LABEL[kind]}. ${explanation}`);
 
   shadow.append(style, chip);
   return host;
 }
 
 /** A tinted row alone does not say why it is tinted, so winners are labelled. */
-function setChips(tracked: TrackedRow, kinds: AwardKind[]): void {
+function setChips(tracked: TrackedRow, kinds: AwardKind[], thinSample: number | null): void {
   const cell = tracked.instructorElement;
   const existing = new Map<string, HTMLElement>();
   for (const node of cell.querySelectorAll<HTMLElement>(`[${VERDCT_BEST_CHIP_ATTRIBUTE}]`)) {
@@ -204,17 +229,22 @@ function setChips(tracked: TrackedRow, kinds: AwardKind[]): void {
   }
 
   for (const kind of kinds) {
-    if (!existing.has(kind)) cell.append(chipHost(kind, tracked.courseId));
+    if (!existing.has(kind)) cell.append(chipHost(kind, tracked.courseId, thinSample));
   }
 }
 
-function setBest(row: HTMLElement, tracked: TrackedRow, kinds: AwardKind[]): void {
+function setBest(
+  row: HTMLElement,
+  tracked: TrackedRow,
+  kinds: AwardKind[],
+  thinSample: number | null,
+): void {
   if (kinds.length > 0) {
     row.setAttribute(VERDCT_BEST_ATTRIBUTE, kinds.join(' '));
   } else if (row.hasAttribute(VERDCT_BEST_ATTRIBUTE)) {
     row.removeAttribute(VERDCT_BEST_ATTRIBUTE);
   }
-  setChips(tracked, kinds);
+  setChips(tracked, kinds, thinSample);
 }
 
 /**
@@ -260,9 +290,17 @@ export function evaluateBestSections(): void {
         if (topOverall > -Infinity && tracked.overallScore === topOverall) kinds.push('overall');
       }
 
-      setBest(row, tracked, kinds);
+      // Only flag thinness on the award that can actually be thin.
+      const thinSample =
+        kinds.includes('rated') && tracked.ratingSample < MIN_CONFIDENT_RATINGS
+          ? tracked.ratingSample
+          : null;
+
+      setBest(row, tracked, kinds, thinSample);
       for (const professor of tracked.professors) {
-        if (kinds.length > 0) awards.set(professor, { kinds, courseId: tracked.courseId });
+        if (kinds.length > 0) {
+          awards.set(professor, { kinds, courseId: tracked.courseId, thinSample });
+        }
       }
     }
   }

@@ -49,6 +49,7 @@ let themePreference: ThemePreference = 'auto';
 interface PopoverAward {
   kinds: Array<'rated' | 'overall'>;
   courseId: string;
+  thinSample: number | null;
 }
 let awards = new Map<string, PopoverAward>();
 
@@ -460,7 +461,8 @@ function popoverContent(state: BadgeState, professorName: string): DocumentFragm
         'span',
         'why',
         kind === 'rated'
-          ? `Highest rating in ${award!.courseId}, before difficulty.`
+          ? `Highest rating in ${award!.courseId}, before difficulty.` +
+            (award!.thinSample ? ` Based on only ${award!.thinSample} ratings.` : '')
           : `Best rating-to-difficulty balance in ${award!.courseId}.`,
       ),
     );
@@ -471,8 +473,8 @@ function popoverContent(state: BadgeState, professorName: string): DocumentFragm
   if (rating.numRatings < LOW_SAMPLE_RATING_COUNT) {
     notes.push(
       `Only ${rating.numRatings} rating${rating.numRatings === 1 ? '' : 's'} — treat as provisional.` +
-        ` Needs ${LOW_SAMPLE_RATING_COUNT} to be considered for a best-section award,` +
-        ' so a higher score here can still lose to a better-reviewed one.',
+        ` Still counts for Best rated, but needs ${LOW_SAMPLE_RATING_COUNT} to be considered` +
+        ' for Best overall.',
     );
   }
   if (rating.matchConfidence === 'low') {
@@ -622,7 +624,7 @@ function badgeLabel(state: BadgeState): BadgeLabel {
     trend: rating.trend,
     aria:
       `rated ${rating.overallRating.toFixed(1)} out of 5 from ${rating.numRatings} ratings` +
-      (lowSample ? ', provisional — too few to win a best-section award' : '') +
+      (lowSample ? ', provisional' : '') +
       (rating.trend === 'rising' || rating.trend === 'falling' ? `, ${rating.trend}` : ''),
   };
 }

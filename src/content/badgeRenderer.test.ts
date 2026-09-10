@@ -175,7 +175,7 @@ describe('badge renderer', () => {
     // The number alone made a 4.7 look like a peer of a well-reviewed 4.4.
     expect(badgeButton(section, 'Ada Lovelace').textContent).toBe('4.7(3)');
     expect(badgeButton(section, 'Ada Lovelace').getAttribute('aria-label')).toContain(
-      'too few to win',
+      'provisional',
     );
   });
 

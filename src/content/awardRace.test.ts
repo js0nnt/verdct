@@ -64,9 +64,9 @@ describe('award settling under out-of-order resolution', () => {
     expect(awardsOn(best)).toEqual(['overall', 'rated']);
   });
 
-  it('does not let an ineligible high score suppress the real winner', () => {
+  it('splits the awards correctly however the thin score arrives', () => {
     const thin = makeRow(), real = makeRow(), other = makeRow();
-    // The 4.7 with 3 ratings resolves first, then the eligible field.
+    // The 4.7 with 3 ratings resolves first, then the better-reviewed field.
     recordSection(thin, { status: 'ready', rating: rating({ normalizedName: 'a', overallRating: 4.7, numRatings: 3 }) });
     evaluateBestSections();
     recordSection(real, { status: 'ready', rating: rating({ normalizedName: 'b', overallRating: 4.4, numRatings: 5 }) });
@@ -74,7 +74,8 @@ describe('award settling under out-of-order resolution', () => {
     recordSection(other, { status: 'ready', rating: rating({ normalizedName: 'c', overallRating: 3.1 }) });
     evaluateBestSections();
 
-    expect(awardsOn(thin)).toEqual([]);
-    expect(awardsOn(real)).toEqual(['overall', 'rated']);
+    // Highest is a fact and holds; the recommendation goes to the evidence.
+    expect(awardsOn(thin)).toEqual(['rated']);
+    expect(awardsOn(real)).toEqual(['overall']);
   });
 });
