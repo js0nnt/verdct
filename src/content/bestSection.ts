@@ -1,4 +1,8 @@
-import { VERDCT_BEST_ATTRIBUTE, VERDCT_BEST_CHIP_ATTRIBUTE } from '../shared/constants';
+import {
+  MIN_CONFIDENT_RATINGS,
+  VERDCT_BEST_ATTRIBUTE,
+  VERDCT_BEST_CHIP_ATTRIBUTE,
+} from '../shared/constants';
 import type { ProfessorRating } from '../shared/types';
 import type { BadgeState } from './badgeRenderer';
 import { configureAwards } from './badgeRenderer';
@@ -24,9 +28,10 @@ const MIN_DISTINCT_PROFESSORS = 2;
 /**
  * A rating must clear this many reviews to win. Without it a 4.7 from 3
  * students would outrank a 4.5 from 200, which is exactly the misleading
- * comparison the provisional badge treatment exists to prevent.
+ * comparison the provisional badge treatment exists to prevent. Shared with the
+ * badge so the two can never disagree about what counts as well-supported.
  */
-const MIN_RATINGS_TO_WIN = 5;
+const MIN_RATINGS_TO_WIN = MIN_CONFIDENT_RATINGS;
 
 /**
  * Rating alone says nothing about workload, so a demanding grader with devoted
@@ -47,9 +52,12 @@ export const AWARD_LABEL: Record<AwardKind, string> = {
 };
 
 export function awardExplanation(kind: AwardKind, courseId: string): string {
+  // Naming the bar matters: a higher score with too few reviews is passed over,
+  // and without saying so the award looks simply wrong next to it.
+  const bar = `Only professors with at least ${MIN_CONFIDENT_RATINGS} ratings are considered.`;
   return kind === 'rated'
-    ? `Highest student rating in ${courseId}. Does not account for how hard the course is.`
-    : `Best balance of rating and difficulty in ${courseId}.`;
+    ? `Highest rating in ${courseId} among well-reviewed professors. Does not account for how hard the course is. ${bar}`
+    : `Best balance of rating and difficulty in ${courseId}. ${bar}`;
 }
 
 interface TrackedRow {
@@ -159,12 +167,8 @@ const CHIP_STYLES = `
     vertical-align: middle;
     cursor: help;
   }
-  /* The rating-only award is the weaker claim, so it reads quieter. */
-  span.chip.rated {
-    border-color: var(--v-border-strong);
-    background: transparent;
-    color: var(--v-text-muted);
-  }
+  /* Both awards share one colour: the labels already distinguish them, and a
+     greyed chip read as disabled rather than as the weaker of two claims. */
 `;
 
 function chipHost(kind: AwardKind, courseId: string): HTMLElement {

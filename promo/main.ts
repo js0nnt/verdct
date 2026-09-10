@@ -350,7 +350,7 @@ async function render(): Promise<void> {
     await highlightBest();
     // Let the badge settle before the popover is positioned against it.
     await new Promise((r) => setTimeout(r, 150));
-    openPopover('Priya Raman');
+    openPopover('Adrian Moss');
   }
 
   if (shot === '3') {

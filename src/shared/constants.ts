@@ -15,6 +15,15 @@ export const TAB_DATA_KEY_PREFIX = 'verdct:tab:';
 
 /** Below this, the badges already make the comparison and a chart adds nothing. */
 export const MIN_POINTS_TO_COMPARE = 3;
+
+/**
+ * Below this many reviews an average is noise as much as signal. One constant
+ * because it governs two things that must agree: whether a badge is drawn
+ * provisionally, and whether a professor can win a best-section award. Held
+ * separately they could drift, and a badge could look trustworthy while being
+ * silently excluded from the awards.
+ */
+export const MIN_CONFIDENT_RATINGS = 5;
 export const RMP_GRAPHQL_ENDPOINT = 'https://www.ratemyprofessors.com/graphql';
 
 /** Verified against legacyId 477524, which resolves to the ASU professor page. */

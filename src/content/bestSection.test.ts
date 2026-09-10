@@ -238,6 +238,30 @@ describe('best section highlighting', () => {
     expect(awardsOn(clear).sort()).toEqual(['overall', 'rated']);
   });
 
+  it('does not award a higher score that is too thinly reviewed', () => {
+    // The real case: a 4.7 from 3 students against a 4.4 from 5.
+    const thin = addRow(
+      'MAT 243',
+      ready({ normalizedName: 'a', overallRating: 4.7, difficulty: 3.7, numRatings: 3 }),
+    );
+    const supported = addRow(
+      'MAT 243',
+      ready({ normalizedName: 'b', overallRating: 4.4, difficulty: 2.6, numRatings: 5 }),
+    );
+    addRow('MAT 243', ready({ normalizedName: 'c', overallRating: 3.1, numRatings: 40 }));
+
+    evaluateBestSections();
+
+    expect(awardsOn(thin)).toEqual([]);
+    expect(awardsOn(supported).sort()).toEqual(['overall', 'rated']);
+  });
+
+  it('states the ratings bar, so passing over a higher score is explicable', () => {
+    // Without this the award reads as simply wrong beside a bigger number.
+    expect(awardExplanation('rated', 'MAT 243')).toMatch(/at least 5 ratings/i);
+    expect(awardExplanation('overall', 'MAT 243')).toMatch(/at least 5 ratings/i);
+  });
+
   it('explains each award in terms a reader can check', () => {
     const best = addRow('MAT 243', ready({ normalizedName: 'a', overallRating: 4.6 }));
     addRow('MAT 243', ready({ normalizedName: 'b', overallRating: 3.0 }));

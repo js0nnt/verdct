@@ -2,6 +2,7 @@ import {
   VERDCT_BADGE_ATTRIBUTE,
   VERDCT_INJECTED_SELECTOR,
   VERDCT_POPOVER_ATTRIBUTE,
+  MIN_CONFIDENT_RATINGS,
   professorUrl,
 } from '../shared/constants';
 import { toggleFavorite } from '../shared/favorites';
@@ -14,9 +15,10 @@ export { VERDCT_BADGE_ATTRIBUTE, VERDCT_POPOVER_ATTRIBUTE };
 
 /**
  * Below this many ratings the average is noise as much as signal, so the badge
- * is drawn provisionally rather than as a confident number.
+ * is drawn provisionally rather than as a confident number. Shared with the
+ * best-section awards, which use the same bar to decide who can win.
  */
-const LOW_SAMPLE_RATING_COUNT = 5;
+const LOW_SAMPLE_RATING_COUNT = MIN_CONFIDENT_RATINGS;
 
 export type BadgeState =
   | { status: 'loading' }
@@ -275,11 +277,6 @@ const POPOVER_STYLES = `
     letter-spacing: 0.05em;
     text-transform: uppercase;
   }
-  .award.rated .tag {
-    border-color: var(--v-border-strong);
-    background: transparent;
-    color: var(--v-text-muted);
-  }
   .award .why { font-size: 10.5px; color: var(--v-text-muted); line-height: 1.35; }
 
   .favorite {
@@ -462,7 +459,11 @@ function popoverContent(state: BadgeState, professorName: string): DocumentFragm
 
   const notes: string[] = [];
   if (rating.numRatings < LOW_SAMPLE_RATING_COUNT) {
-    notes.push(`Only ${rating.numRatings} rating${rating.numRatings === 1 ? '' : 's'} — treat as provisional.`);
+    notes.push(
+      `Only ${rating.numRatings} rating${rating.numRatings === 1 ? '' : 's'} — treat as provisional.` +
+        ` Needs ${LOW_SAMPLE_RATING_COUNT} to be considered for a best-section award,` +
+        ' so a higher score here can still lose to a better-reviewed one.',
+    );
   }
   if (rating.matchConfidence === 'low') {
     notes.push('Name matched approximately — double-check before relying on it.');
