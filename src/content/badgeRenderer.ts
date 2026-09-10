@@ -144,6 +144,16 @@ const BADGE_STYLES = `
   .trend.rising  { color: var(--v-good); }
   .trend.falling { color: var(--v-poor); }
 
+  /* The review count, shown only when it is low enough to matter. A dashed
+     border alone was too quiet: a 4.7 looked like a peer of a well-reviewed
+     4.4, so losing an award to it read as a bug rather than as thin evidence. */
+  .count {
+    font-size: 9.5px;
+    font-weight: 600;
+    color: var(--v-text-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
   .marker {
     font-size: 9px;
     font-weight: 700;
@@ -564,6 +574,8 @@ function scheduleHide(): void {
 
 interface BadgeLabel {
   text: string;
+  /** Review count, shown inline only when the sample is too thin to trust. */
+  count: number | null;
   marker: string;
   tone: BadgeTone | 'loading';
   lowSample: boolean;
@@ -581,13 +593,13 @@ const TREND_WORDS = {
 function badgeLabel(state: BadgeState): BadgeLabel {
   if (state.status === 'loading') {
     return {
-      text: '···', marker: '', tone: 'loading', lowSample: false, trend: null,
+      text: '···', count: null, marker: '', tone: 'loading', lowSample: false, trend: null,
       aria: 'loading rating',
     };
   }
   if (state.status === 'error') {
     return {
-      text: '—', marker: '', tone: 'unknown', lowSample: false, trend: null,
+      text: '—', count: null, marker: '', tone: 'unknown', lowSample: false, trend: null,
       aria: 'rating unavailable',
     };
   }
@@ -595,7 +607,7 @@ function badgeLabel(state: BadgeState): BadgeLabel {
   const { rating } = state;
   if (rating.matchConfidence === 'none' || rating.overallRating === null || rating.numRatings === 0) {
     return {
-      text: '—', marker: '', tone: 'unknown', lowSample: false, trend: null,
+      text: '—', count: null, marker: '', tone: 'unknown', lowSample: false, trend: null,
       aria: 'no rating found',
     };
   }
@@ -603,19 +615,20 @@ function badgeLabel(state: BadgeState): BadgeLabel {
   const lowSample = rating.numRatings < LOW_SAMPLE_RATING_COUNT;
   return {
     text: rating.overallRating.toFixed(1),
+    count: lowSample ? rating.numRatings : null,
     marker: rating.matchConfidence === 'low' ? '?' : '',
     tone: ratingTone(rating),
     lowSample,
     trend: rating.trend,
     aria:
       `rated ${rating.overallRating.toFixed(1)} out of 5 from ${rating.numRatings} ratings` +
-      (lowSample ? ', provisional' : '') +
+      (lowSample ? ', provisional — too few to win a best-section award' : '') +
       (rating.trend === 'rising' || rating.trend === 'falling' ? `, ${rating.trend}` : ''),
   };
 }
 
 function paintBadge(handle: BadgeHandle): void {
-  const { text, marker, tone, lowSample, trend, aria } = badgeLabel(handle.state);
+  const { text, count, marker, tone, lowSample, trend, aria } = badgeLabel(handle.state);
   handle.button.className = tone;
 
   const legacyId = handle.state.status === 'ready' ? handle.state.rating.legacyId : null;
@@ -636,6 +649,10 @@ function paintBadge(handle: BadgeHandle): void {
     handle.button.append(element('span', `dot ${tone}`));
   }
   handle.button.append(document.createTextNode(text));
+
+  if (count !== null) {
+    handle.button.append(element('span', 'count', `(${count})`));
+  }
 
   if (lowSample) {
     handle.button.dataset.sample = 'low';

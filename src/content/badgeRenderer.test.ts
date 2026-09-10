@@ -168,6 +168,24 @@ describe('badge renderer', () => {
     expect(button.getAttribute('aria-label')).toContain('provisional');
   });
 
+  it('shows the review count inline when the sample is thin', () => {
+    const section = buildSection();
+    upsertBadge(section, { status: 'ready', rating: rating({ overallRating: 4.7, numRatings: 3 }) });
+
+    // The number alone made a 4.7 look like a peer of a well-reviewed 4.4.
+    expect(badgeButton(section, 'Ada Lovelace').textContent).toBe('4.7(3)');
+    expect(badgeButton(section, 'Ada Lovelace').getAttribute('aria-label')).toContain(
+      'too few to win',
+    );
+  });
+
+  it('leaves the count off a well-sampled badge', () => {
+    const section = buildSection();
+    upsertBadge(section, { status: 'ready', rating: rating({ overallRating: 4.4, numRatings: 40 }) });
+
+    expect(badgeButton(section, 'Ada Lovelace').textContent).toBe('4.4');
+  });
+
   it('does not mark a well-sampled badge provisional', () => {
     const section = buildSection();
     upsertBadge(section, { status: 'ready', rating: rating({ numRatings: 31 }) });

@@ -37,7 +37,7 @@ function rating(over: Partial<ProfessorRating>): ProfessorRating {
 
 const ROWS: Row[] = [
   { number: '10412', professor: 'Adrian Moss', days: 'T Th', start: '9:00 AM', end: '10:15 AM',
-    rating: { displayName: 'Adrian Moss', overallRating: 4.7, difficulty: 4.5, wouldTakeAgainPct: 92, numRatings: 34 } },
+    rating: { displayName: 'Adrian Moss', overallRating: 4.7, difficulty: 3.7, wouldTakeAgainPct: 92, numRatings: 3 } },
   { number: '10418', professor: 'Priya Raman', days: 'M W', start: '1:30 PM', end: '2:45 PM',
     rating: { displayName: 'Priya Raman', overallRating: 4.4, difficulty: 2.2, wouldTakeAgainPct: 88, numRatings: 41, trend: 'rising' } },
   { number: '10425', professor: 'Elena Vasquez', days: 'T Th', start: '1:30 PM', end: '2:45 PM',
