@@ -67,8 +67,14 @@ function parseEntry(value: unknown): CacheEntry | null {
       matchConfidence: confidence,
       trend,
       // Entries cached before links existed simply have no id, rather than
-      // being discarded and refetched.
-      legacyId: optionalNumber(rating.legacyId),
+      // being discarded and refetched. Validated as strictly as the parse in
+      // rmpClient, since this value ends up in an href.
+      legacyId:
+        typeof rating.legacyId === 'number' &&
+        Number.isInteger(rating.legacyId) &&
+        rating.legacyId >= 0
+          ? rating.legacyId
+          : null,
     },
     lastAccessedAt:
       typeof value.lastAccessedAt === 'number' && Number.isFinite(value.lastAccessedAt)

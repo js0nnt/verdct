@@ -65,3 +65,11 @@ Latest `validate:asu` run: 17 of 17 rows badged in **3.9s cold-cache** (was 15.8
 ## Not yet built
 
 Phase 3 (sentiment tags, seat alerts, alternate-section recommender)..
+
+## Privacy
+
+Verdct has no server, no analytics, and no account. The only outbound request is a professor-name lookup to RateMyProfessor, sent without cookies; everything else is stored locally in your browser. See [PRIVACY.md](PRIVACY.md) for the full accounting, including what is stored and how to clear it.
+
+## License
+
+[MIT](LICENSE).

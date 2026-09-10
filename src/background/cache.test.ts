@@ -122,6 +122,28 @@ describe('rating cache', () => {
     expect(Object.keys(pruned)).toEqual(['fresh']);
   });
 
+  it.each([
+    ['a fractional id', 12.5],
+    ['a negative id', -1],
+    ['a string id', '477524'],
+    ['null', null],
+  ])('refuses %s for the professor link', async (_label, legacyId) => {
+    const area2 = fakeArea();
+    await writeCachedRating(rating({ legacyId: legacyId as never }), { area: area2, now: () => 1_000 });
+
+    const cached = await readCachedRating('ada lovelace', { area: area2, now: () => 1_000 });
+    // A bad id must not reach the href; it becomes "no link" instead.
+    expect(cached?.legacyId).toBeNull();
+  });
+
+  it('keeps a valid professor id', async () => {
+    await writeCachedRating(rating({ legacyId: 477524 }), { area, now: () => 1_000 });
+
+    expect((await readCachedRating('ada lovelace', { area, now: () => 1_000 }))?.legacyId).toBe(
+      477524,
+    );
+  });
+
   it('ignores corrupt stored entries instead of throwing', async () => {
     area = fakeArea({
       [CACHE_STORAGE_KEY]: {
