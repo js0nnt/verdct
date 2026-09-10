@@ -8,6 +8,8 @@ import { isVerdctNode } from './badgeRenderer';
 import {
   VERDCT_BEST_ATTRIBUTE,
   VERDCT_BEST_CHIP_ATTRIBUTE,
+  awardExplanation,
+  difficultyAdjustedScore,
   evaluateBestSections,
   isEligibleToWin,
   recordSection,
@@ -56,8 +58,14 @@ function ready(overrides: Partial<ProfessorRating>): BadgeState {
   return { status: 'ready', rating: rating(overrides) };
 }
 
+function awardsOn(row: HTMLElement): string[] {
+  return [...row.querySelectorAll(`[${VERDCT_BEST_CHIP_ATTRIBUTE}]`)].map(
+    (chip) => chip.getAttribute(VERDCT_BEST_CHIP_ATTRIBUTE) ?? '',
+  );
+}
+
 function isBest(row: HTMLElement): boolean {
-  return row.getAttribute(VERDCT_BEST_ATTRIBUTE) === 'true';
+  return row.hasAttribute(VERDCT_BEST_ATTRIBUTE);
 }
 
 describe('best section highlighting', () => {
@@ -196,8 +204,67 @@ describe('best section highlighting', () => {
 
     const chip = best.querySelector(`[${VERDCT_BEST_CHIP_ATTRIBUTE}]`);
     expect(chip).not.toBeNull();
-    expect(chip!.shadowRoot!.textContent).toContain('Best rated');
+    expect(chip!.shadowRoot!.textContent).toContain('Best');
     expect(other.querySelector(`[${VERDCT_BEST_CHIP_ATTRIBUTE}]`)).toBeNull();
+  });
+
+  it('separates the two awards when the top-rated professor is also the hardest', () => {
+    // 4.8 but punishing; 4.4 at average difficulty is the better balance.
+    const harsh = addRow(
+      'MAT 243',
+      ready({ normalizedName: 'a', overallRating: 4.8, difficulty: 4.8 }),
+    );
+    const balanced = addRow(
+      'MAT 243',
+      ready({ normalizedName: 'b', overallRating: 4.4, difficulty: 2.4 }),
+    );
+    addRow('MAT 243', ready({ normalizedName: 'c', overallRating: 3.0, difficulty: 3.0 }));
+
+    evaluateBestSections();
+
+    expect(awardsOn(harsh)).toEqual(['rated']);
+    expect(awardsOn(balanced)).toEqual(['overall']);
+  });
+
+  it('gives one row both awards when it leads on rating and balance', () => {
+    const clear = addRow(
+      'MAT 243',
+      ready({ normalizedName: 'a', overallRating: 4.8, difficulty: 2.0 }),
+    );
+    addRow('MAT 243', ready({ normalizedName: 'b', overallRating: 3.2, difficulty: 4.0 }));
+
+    evaluateBestSections();
+
+    expect(awardsOn(clear).sort()).toEqual(['overall', 'rated']);
+  });
+
+  it('explains each award in terms a reader can check', () => {
+    const best = addRow('MAT 243', ready({ normalizedName: 'a', overallRating: 4.6 }));
+    addRow('MAT 243', ready({ normalizedName: 'b', overallRating: 3.0 }));
+    evaluateBestSections();
+
+    const chip = best.querySelector(`[${VERDCT_BEST_CHIP_ATTRIBUTE}]`)!;
+    const inner = chip.shadowRoot!.querySelector('span.chip')!;
+    // "Best" on its own invites the reading that it accounts for everything.
+    expect(inner.getAttribute('title')).toContain('MAT 243');
+    expect(inner.getAttribute('aria-label')).toContain('MAT 243');
+  });
+
+  it('still awards best rated when difficulty is unknown', () => {
+    const rated = addRow(
+      'MAT 243',
+      ready({ normalizedName: 'a', overallRating: 4.6, difficulty: null }),
+    );
+    const other = addRow(
+      'MAT 243',
+      ready({ normalizedName: 'b', overallRating: 3.0, difficulty: 3.0 }),
+    );
+
+    evaluateBestSections();
+
+    // No difficulty means no balance score, so it cannot claim best overall.
+    expect(awardsOn(rated)).toEqual(['rated']);
+    expect(awardsOn(other)).toEqual(['overall']);
   });
 
   it('moves the label when the winner changes', () => {
@@ -213,15 +280,18 @@ describe('best section highlighting', () => {
     expect(late.querySelector(`[${VERDCT_BEST_CHIP_ATTRIBUTE}]`)).not.toBeNull();
   });
 
-  it('never adds the label twice on repeated evaluation', () => {
+  it('never duplicates a label on repeated evaluation', () => {
     const best = addRow('MAT 243', ready({ normalizedName: 'a', overallRating: 4.6 }));
     addRow('MAT 243', ready({ normalizedName: 'b', overallRating: 3.0 }));
 
     evaluateBestSections();
+    const first = awardsOn(best);
     evaluateBestSections();
     evaluateBestSections();
 
-    expect(best.querySelectorAll(`[${VERDCT_BEST_CHIP_ATTRIBUTE}]`)).toHaveLength(1);
+    // A row can hold both awards; what it must never do is grow copies.
+    expect(awardsOn(best)).toEqual(first);
+    expect(new Set(awardsOn(best)).size).toBe(awardsOn(best).length);
   });
 
   it('is ignored by the mutation filter, so rendering it cannot retrigger a scan', () => {
@@ -241,6 +311,43 @@ describe('best section highlighting', () => {
     evaluateBestSections();
 
     expect(document.head.querySelectorAll(`style[${VERDCT_BEST_ATTRIBUTE}]`)).toHaveLength(1);
+  });
+
+  describe('difficultyAdjustedScore', () => {
+    it('leaves a rating alone at midpoint difficulty', () => {
+      expect(difficultyAdjustedScore(rating({ overallRating: 4, difficulty: 3 }))).toBe(4);
+    });
+
+    it('discounts a harder course and credits an easier one', () => {
+      const hard = difficultyAdjustedScore(rating({ overallRating: 4, difficulty: 5 }))!;
+      const easy = difficultyAdjustedScore(rating({ overallRating: 4, difficulty: 1 }))!;
+
+      expect(hard).toBeLessThan(4);
+      expect(easy).toBeGreaterThan(4);
+      // Symmetric around the midpoint.
+      expect(4 - hard).toBeCloseTo(easy - 4, 5);
+    });
+
+    it('is null when difficulty is unknown', () => {
+      expect(difficultyAdjustedScore(rating({ difficulty: null }))).toBeNull();
+    });
+
+    it('does not let easiness overturn a large rating gap', () => {
+      const great = difficultyAdjustedScore(rating({ overallRating: 4.6, difficulty: 4 }))!;
+      const easy = difficultyAdjustedScore(rating({ overallRating: 3.2, difficulty: 1 }))!;
+
+      expect(great).toBeGreaterThan(easy);
+    });
+  });
+
+  describe('awardExplanation', () => {
+    it('says plainly that the rating award ignores difficulty', () => {
+      expect(awardExplanation('rated', 'MAT 243')).toMatch(/does not account/i);
+    });
+
+    it('describes the overall award as a balance', () => {
+      expect(awardExplanation('overall', 'MAT 243')).toMatch(/balance/i);
+    });
   });
 
   describe('isEligibleToWin', () => {

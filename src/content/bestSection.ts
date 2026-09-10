@@ -1,9 +1,19 @@
 import { VERDCT_BEST_ATTRIBUTE, VERDCT_BEST_CHIP_ATTRIBUTE } from '../shared/constants';
 import type { ProfessorRating } from '../shared/types';
 import type { BadgeState } from './badgeRenderer';
+import { configureAwards } from './badgeRenderer';
 import type { ScannedClassSection } from './domScanner';
+import { EMBEDDED_TOKENS } from './theme';
 
 export { VERDCT_BEST_ATTRIBUTE, VERDCT_BEST_CHIP_ATTRIBUTE };
+
+/** Which distinction a section holds within its course. */
+export type AwardKind = 'rated' | 'overall';
+
+export interface AwardInfo {
+  kinds: AwardKind[];
+  courseId: string;
+}
 
 /**
  * A course needs at least this many distinct rated professors before naming a
@@ -18,12 +28,38 @@ const MIN_DISTINCT_PROFESSORS = 2;
  */
 const MIN_RATINGS_TO_WIN = 5;
 
+/**
+ * Rating alone says nothing about workload, so a demanding grader with devoted
+ * students can hold the top score while being the harder choice. The overall
+ * score discounts a rating by how far difficulty sits above the middle of the
+ * scale, and credits one that sits below it.
+ *
+ * The weight is a judgement call, not a measurement: at 0.35 a professor a full
+ * point harder than average gives up roughly a third of a rating point, which
+ * is enough to reorder genuinely close calls without letting easiness dominate.
+ */
+const DIFFICULTY_WEIGHT = 0.35;
+const DIFFICULTY_MIDPOINT = 3;
+
+export const AWARD_LABEL: Record<AwardKind, string> = {
+  rated: 'Best rated',
+  overall: 'Best overall',
+};
+
+export function awardExplanation(kind: AwardKind, courseId: string): string {
+  return kind === 'rated'
+    ? `Highest student rating in ${courseId}. Does not account for how hard the course is.`
+    : `Best balance of rating and difficulty in ${courseId}.`;
+}
+
 interface TrackedRow {
   courseId: string;
-  /** Where the chip is injected; the badge already draws the eye here. */
+  /** Where chips are injected; the badge already draws the eye here. */
   instructorElement: HTMLElement;
-  /** Best eligible rating among the professors listed in this row. */
-  score: number | null;
+  /** Best raw rating among the professors listed in this row. */
+  ratingScore: number | null;
+  /** Best difficulty-adjusted rating among them. */
+  overallScore: number | null;
   /** Normalized names of eligible professors, for counting distinct choices. */
   professors: Set<string>;
 }
@@ -43,6 +79,12 @@ export function isEligibleToWin(rating: ProfessorRating): boolean {
   );
 }
 
+/** Rating discounted by difficulty. Null when difficulty is unknown. */
+export function difficultyAdjustedScore(rating: ProfessorRating): number | null {
+  if (rating.overallRating === null || rating.difficulty === null) return null;
+  return rating.overallRating - DIFFICULTY_WEIGHT * (rating.difficulty - DIFFICULTY_MIDPOINT);
+}
+
 function ensureStyles(): void {
   if (styleInjected || document.head.querySelector(`style[${VERDCT_BEST_ATTRIBUTE}]`)) {
     styleInjected = true;
@@ -54,7 +96,7 @@ function ensureStyles(): void {
   // Scoped entirely to the marker attribute, so nothing here can affect a row
   // Verdct has not explicitly marked.
   style.textContent = `
-    [${VERDCT_BEST_ATTRIBUTE}="true"] {
+    [${VERDCT_BEST_ATTRIBUTE}] {
       background-image: linear-gradient(90deg, rgba(31, 157, 99, 0.09), rgba(31, 157, 99, 0) 50%) !important;
       box-shadow: inset 2px 0 0 0 #1f9d63;
     }
@@ -76,12 +118,17 @@ export function recordSection(section: ScannedClassSection, state: BadgeState): 
     : {
         courseId: section.courseId,
         instructorElement: section.instructorElement,
-        score: null,
+        ratingScore: null,
+        overallScore: null,
         professors: new Set(),
       };
 
   if (rating && isEligibleToWin(rating)) {
-    row.score = Math.max(row.score ?? -Infinity, rating.overallRating!);
+    row.ratingScore = Math.max(row.ratingScore ?? -Infinity, rating.overallRating!);
+    const adjusted = difficultyAdjustedScore(rating);
+    if (adjusted !== null) {
+      row.overallScore = Math.max(row.overallScore ?? -Infinity, adjusted);
+    }
     row.professors.add(rating.normalizedName);
   }
 
@@ -90,13 +137,15 @@ export function recordSection(section: ScannedClassSection, state: BadgeState): 
 
 const CHIP_STYLES = `
   :host { all: initial; }
-  span {
+  ${EMBEDDED_TOKENS}
+
+  span.chip {
     all: unset;
     display: inline-flex;
     align-items: center;
     margin-left: 6px;
     padding: 1px 6px;
-    border: 1px solid rgba(31, 157, 99, 0.35);
+    border: 1px solid rgba(31, 157, 99, 0.4);
     border-radius: 5px;
     background: rgba(31, 157, 99, 0.1);
     color: #14764a;
@@ -108,43 +157,65 @@ const CHIP_STYLES = `
     text-transform: uppercase;
     white-space: nowrap;
     vertical-align: middle;
+    cursor: help;
+  }
+  /* The rating-only award is the weaker claim, so it reads quieter. */
+  span.chip.rated {
+    border-color: var(--v-border-strong);
+    background: transparent;
+    color: var(--v-text-muted);
   }
 `;
 
-/** A tinted row alone does not say why it is tinted, so the winner is labelled. */
-function setChip(tracked: TrackedRow, isBest: boolean): void {
-  const cell = tracked.instructorElement;
-  const existing = cell.querySelector<HTMLElement>(`[${VERDCT_BEST_CHIP_ATTRIBUTE}]`);
-
-  if (!isBest) {
-    existing?.remove();
-    return;
-  }
-  if (existing) return;
-
+function chipHost(kind: AwardKind, courseId: string): HTMLElement {
   const host = document.createElement('span');
-  host.setAttribute(VERDCT_BEST_CHIP_ATTRIBUTE, '');
+  host.setAttribute(VERDCT_BEST_CHIP_ATTRIBUTE, kind);
+
   const shadow = host.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = CHIP_STYLES;
-  const label = document.createElement('span');
-  label.textContent = 'Best rated';
-  shadow.append(style, label);
-  cell.append(host);
+
+  const chip = document.createElement('span');
+  chip.className = `chip ${kind}`;
+  chip.textContent = AWARD_LABEL[kind];
+  // Hovering the chip has to say what it actually means; "best" alone invites
+  // the reading that it accounts for everything.
+  chip.title = awardExplanation(kind, courseId);
+  chip.setAttribute('aria-label', `${AWARD_LABEL[kind]}. ${awardExplanation(kind, courseId)}`);
+
+  shadow.append(style, chip);
+  return host;
 }
 
-function setBest(row: HTMLElement, tracked: TrackedRow, isBest: boolean): void {
-  if (isBest) {
-    row.setAttribute(VERDCT_BEST_ATTRIBUTE, 'true');
+/** A tinted row alone does not say why it is tinted, so winners are labelled. */
+function setChips(tracked: TrackedRow, kinds: AwardKind[]): void {
+  const cell = tracked.instructorElement;
+  const existing = new Map<string, HTMLElement>();
+  for (const node of cell.querySelectorAll<HTMLElement>(`[${VERDCT_BEST_CHIP_ATTRIBUTE}]`)) {
+    existing.set(node.getAttribute(VERDCT_BEST_CHIP_ATTRIBUTE) ?? '', node);
+  }
+
+  for (const [kind, node] of existing) {
+    if (!kinds.includes(kind as AwardKind)) node.remove();
+  }
+
+  for (const kind of kinds) {
+    if (!existing.has(kind)) cell.append(chipHost(kind, tracked.courseId));
+  }
+}
+
+function setBest(row: HTMLElement, tracked: TrackedRow, kinds: AwardKind[]): void {
+  if (kinds.length > 0) {
+    row.setAttribute(VERDCT_BEST_ATTRIBUTE, kinds.join(' '));
   } else if (row.hasAttribute(VERDCT_BEST_ATTRIBUTE)) {
     row.removeAttribute(VERDCT_BEST_ATTRIBUTE);
   }
-  setChip(tracked, isBest);
+  setChips(tracked, kinds);
 }
 
 /**
- * Recomputes the winning row per course. Runs after every lookup resolves, so
- * the highlight settles as ratings arrive rather than needing a final signal.
+ * Recomputes the winners per course. Runs after every lookup resolves, so the
+ * highlight settles as ratings arrive rather than needing a final signal.
  */
 export function evaluateBestSections(): void {
   // Rows detached by ASU re-rendering would otherwise leak and skew counts.
@@ -159,31 +230,46 @@ export function evaluateBestSections(): void {
     byCourse.set(tracked.courseId, rows);
   }
 
+  const awards = new Map<string, AwardInfo>();
+
   for (const rows of byCourse.values()) {
     const distinctProfessors = new Set<string>();
-    let topScore = -Infinity;
+    let topRating = -Infinity;
+    let topOverall = -Infinity;
 
     for (const row of rows) {
       const tracked = trackedRows.get(row)!;
       for (const professor of tracked.professors) distinctProfessors.add(professor);
-      if (tracked.score !== null) topScore = Math.max(topScore, tracked.score);
+      if (tracked.ratingScore !== null) topRating = Math.max(topRating, tracked.ratingScore);
+      if (tracked.overallScore !== null) topOverall = Math.max(topOverall, tracked.overallScore);
     }
 
-    const worthHighlighting =
-      distinctProfessors.size >= MIN_DISTINCT_PROFESSORS && topScore > -Infinity;
+    const worthHighlighting = distinctProfessors.size >= MIN_DISTINCT_PROFESSORS;
 
     for (const row of rows) {
       // Ties all win: several sections taught by the same top professor are
       // genuinely equal choices, and silently picking one would be arbitrary.
       const tracked = trackedRows.get(row)!;
-      setBest(row, tracked, worthHighlighting && tracked.score === topScore);
+      const kinds: AwardKind[] = [];
+      if (worthHighlighting) {
+        if (topRating > -Infinity && tracked.ratingScore === topRating) kinds.push('rated');
+        if (topOverall > -Infinity && tracked.overallScore === topOverall) kinds.push('overall');
+      }
+
+      setBest(row, tracked, kinds);
+      for (const professor of tracked.professors) {
+        if (kinds.length > 0) awards.set(professor, { kinds, courseId: tracked.courseId });
+      }
     }
   }
 
+  // The popover repeats the distinction, so hovering a badge explains it too.
+  configureAwards(awards);
   if (trackedRows.size > 0) ensureStyles();
 }
 
 export function resetBestSectionsForTests(): void {
   trackedRows.clear();
   styleInjected = false;
+  configureAwards(new Map());
 }

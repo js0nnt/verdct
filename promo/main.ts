@@ -37,9 +37,9 @@ function rating(over: Partial<ProfessorRating>): ProfessorRating {
 
 const ROWS: Row[] = [
   { number: '10412', professor: 'Adrian Moss', days: 'T Th', start: '9:00 AM', end: '10:15 AM',
-    rating: { displayName: 'Adrian Moss', overallRating: 4.7, difficulty: 2.6, wouldTakeAgainPct: 92, numRatings: 34 } },
+    rating: { displayName: 'Adrian Moss', overallRating: 4.7, difficulty: 4.5, wouldTakeAgainPct: 92, numRatings: 34 } },
   { number: '10418', professor: 'Priya Raman', days: 'M W', start: '1:30 PM', end: '2:45 PM',
-    rating: { displayName: 'Priya Raman', overallRating: 4.4, difficulty: 2.9, wouldTakeAgainPct: 88, numRatings: 41 } },
+    rating: { displayName: 'Priya Raman', overallRating: 4.4, difficulty: 2.2, wouldTakeAgainPct: 88, numRatings: 41, trend: 'rising' } },
   { number: '10425', professor: 'Elena Vasquez', days: 'T Th', start: '1:30 PM', end: '2:45 PM',
     rating: { displayName: 'Elena Vasquez', overallRating: 4.3, difficulty: 3.0, wouldTakeAgainPct: 81, numRatings: 227, trend: 'falling' } },
   { number: '10431', professor: 'Marcus Feld', days: 'T Th', start: '10:30 AM', end: '11:45 AM',
@@ -242,7 +242,7 @@ async function render(): Promise<void> {
     content.append(browserWindow(await buildTable(ROWS.slice(0, 4)), 900));
     root.append(content);
     const notes = callouts([
-      ['Rating trend', 'Shows when a 4.3 is on the way down.'],
+      ['Two kinds of best', 'Highest rated, and best once difficulty is counted.'],
       ['One click to the source', 'The badge links straight to the full RateMyProfessor page.'],
     ]);
     notes.style.marginTop = '0';
@@ -250,7 +250,7 @@ async function render(): Promise<void> {
     await highlightBest();
     // Let the badge settle before the popover is positioned against it.
     await new Promise((r) => setTimeout(r, 150));
-    openPopover('Elena Vasquez');
+    openPopover('Priya Raman');
   }
 
   if (shot === '3') {

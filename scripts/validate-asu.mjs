@@ -112,10 +112,13 @@ const BADGE_STATE_EXPRESSION = `(() => {
       href: badge?.getAttribute('href') ?? '',
     };
   });
-  const bestRows = [...document.querySelectorAll('[data-verdct-best="true"]')];
+  const bestRows = [...document.querySelectorAll('[data-verdct-best]')].filter(
+    (node) => node.tagName !== 'STYLE',
+  );
   return {
     bestRowCount: bestRows.length,
     bestLabelled: bestRows.filter((row) => row.querySelector('[data-verdct-best-chip]')).length,
+    bestAwards: bestRows.map((row) => row.getAttribute('data-verdct-best')),
     bestProfessors: bestRows.map((row) => {
       const host = row.querySelector('[data-verdct-badge]');
       return host?.getAttribute('data-verdct-badge') ?? '';
@@ -340,6 +343,7 @@ try {
     reportedCourses: reported.courses,
     toolbarBadge: reported.badgeText,
     bestRowCount: finalState.bestRowCount,
+    bestAwards: [...new Set(finalState.bestAwards)],
     bestProfessors: [...new Set(finalState.bestProfessors)],
     sampleBadges: finalState.ratedBadges.slice(0, 5),
     mutationObserved,

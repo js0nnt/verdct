@@ -39,6 +39,25 @@ let settings: VerdctSettings = DEFAULT_SETTINGS;
 let favoriteNames = new Set<string>();
 let themePreference: ThemePreference = 'auto';
 
+/**
+ * Which course-level distinction each professor holds, keyed by normalized
+ * name. Populated by bestSection so the popover can repeat the claim the chip
+ * makes, and say what it means.
+ */
+interface PopoverAward {
+  kinds: Array<'rated' | 'overall'>;
+  courseId: string;
+}
+let awards = new Map<string, PopoverAward>();
+
+export function configureAwards(next: Map<string, PopoverAward>): void {
+  awards = next;
+  for (const host of renderedBadges) {
+    const handle = badgeHandles.get(host);
+    if (handle) paintBadge(handle);
+  }
+}
+
 /** Applies the user's explicit light/dark choice to Verdct's floating surfaces. */
 export function configureTheme(theme: ThemePreference): void {
   themePreference = theme;
@@ -235,6 +254,34 @@ const POPOVER_STYLES = `
   .trend-note.falling { color: var(--v-poor); }
   .trend-note.steady  { color: var(--v-text-muted); }
 
+  .award {
+    display: flex;
+    gap: 6px;
+    align-items: baseline;
+    margin-top: 9px;
+    padding-top: 9px;
+    border-top: 1px solid var(--v-border);
+  }
+  .award + .award { margin-top: 6px; padding-top: 0; border-top: 0; }
+  .award .tag {
+    flex: none;
+    padding: 1px 5px;
+    border: 1px solid rgba(31, 157, 99, 0.4);
+    border-radius: 4px;
+    background: rgba(31, 157, 99, 0.12);
+    color: var(--v-good);
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .award.rated .tag {
+    border-color: var(--v-border-strong);
+    background: transparent;
+    color: var(--v-text-muted);
+  }
+  .award .why { font-size: 10.5px; color: var(--v-text-muted); line-height: 1.35; }
+
   .favorite {
     all: unset;
     display: flex;
@@ -395,6 +442,22 @@ function popoverContent(state: BadgeState, professorName: string): DocumentFragm
 
   if (rating.trend) {
     fragment.append(element('div', `trend-note ${rating.trend}`, TREND_WORDS[rating.trend]));
+  }
+
+  const award = awards.get(rating.normalizedName);
+  for (const kind of award?.kinds ?? []) {
+    const row = element('div', `award ${kind}`);
+    row.append(
+      element('span', 'tag', kind === 'rated' ? 'Best rated' : 'Best overall'),
+      element(
+        'span',
+        'why',
+        kind === 'rated'
+          ? `Highest rating in ${award!.courseId}, before difficulty.`
+          : `Best rating-to-difficulty balance in ${award!.courseId}.`,
+      ),
+    );
+    fragment.append(row);
   }
 
   const notes: string[] = [];
