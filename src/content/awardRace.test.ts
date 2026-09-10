@@ -74,8 +74,9 @@ describe('award settling under out-of-order resolution', () => {
     recordSection(other, { status: 'ready', rating: rating({ normalizedName: 'c', overallRating: 3.1 }) });
     evaluateBestSections();
 
-    // Highest is a fact and holds; the recommendation goes to the evidence.
-    expect(awardsOn(thin)).toEqual(['rated']);
-    expect(awardsOn(real)).toEqual(['overall']);
+    // Neither award has a review floor now; the thin score simply wins both,
+    // and the badge itself carries the warning.
+    expect(awardsOn(thin)).toEqual(['overall', 'rated']);
+    expect(awardsOn(real)).toEqual([]);
   });
 });

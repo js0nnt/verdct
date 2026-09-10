@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { ProfessorRating } from '../shared/types';
 import type { BadgeState } from './badgeRenderer';
 import { isVerdctNode } from './badgeRenderer';
+import { VERDCT_TOOLTIP_ATTRIBUTE } from '../shared/constants';
 import {
   VERDCT_BEST_ATTRIBUTE,
   VERDCT_BEST_CHIP_ATTRIBUTE,
@@ -112,39 +113,67 @@ describe('best section highlighting', () => {
     expect(isBest(second)).toBe(false);
   });
 
-  it('gives best rated to the highest score even on few reviews', () => {
+  it('awards on score alone, whatever the review count', () => {
     const thin = addRow('MAT 243', ready({ normalizedName: 'a', overallRating: 4.9, numRatings: 3 }));
     const solid = addRow('MAT 243', ready({ normalizedName: 'b', overallRating: 4.2, numRatings: 200 }));
     addRow('MAT 243', ready({ normalizedName: 'c', overallRating: 3.1 }));
 
     evaluateBestSections();
 
-    // Highest is a fact; it stays true however few reviews back it.
-    expect(awardsOn(thin)).toEqual(['rated']);
-    // The recommendation still needs evidence behind it.
-    expect(awardsOn(solid)).toEqual(['overall']);
+    // No floor on either award; the grey badge carries the caution instead.
+    expect(awardsOn(thin).sort()).toEqual(['overall', 'rated']);
+    expect(awardsOn(solid)).toEqual([]);
   });
 
-  it('says on hover when the top rating rests on few reviews', () => {
+  function hoverChip(row: HTMLElement, kind: string): HTMLElement {
+    const chip = row
+      .querySelector(`[${VERDCT_BEST_CHIP_ATTRIBUTE}="${kind}"]`)!
+      .shadowRoot!.querySelector<HTMLElement>('span.chip')!;
+    chip.dispatchEvent(new MouseEvent('mouseenter'));
+    return chip;
+  }
+
+  function tooltipPanel(): HTMLElement {
+    return document
+      .querySelector(`[${VERDCT_TOOLTIP_ATTRIBUTE}]`)!
+      .shadowRoot!.querySelector<HTMLElement>('.tip')!;
+  }
+
+  it('shows a real tooltip on hover, not a title that never appears', () => {
     const thin = addRow('MAT 243', ready({ normalizedName: 'a', overallRating: 4.9, numRatings: 3 }));
     addRow('MAT 243', ready({ normalizedName: 'b', overallRating: 4.2, numRatings: 200 }));
     evaluateBestSections();
 
-    const chip = thin.querySelector(`[${VERDCT_BEST_CHIP_ATTRIBUTE}="rated"]`)!;
-    expect(chip.shadowRoot!.querySelector('span.chip')!.getAttribute('title')).toMatch(
-      /only 3 ratings/i,
-    );
+    const chip = hoverChip(thin, 'rated');
+    // A native title inside a shadow root was the thing that never showed.
+    expect(chip.hasAttribute('title')).toBe(false);
+
+    const tip = tooltipPanel();
+    expect(tip.hidden).toBe(false);
+    expect(tip.textContent).toMatch(/only 3 ratings/i);
+
+    chip.dispatchEvent(new MouseEvent('mouseleave'));
+    expect(tip.hidden).toBe(true);
   });
 
-  it('leaves the caveat off a well-reviewed best rated', () => {
+  it('leaves the thin-sample caveat off a well-reviewed winner', () => {
     const solid = addRow('MAT 243', ready({ normalizedName: 'a', overallRating: 4.9, numRatings: 90 }));
     addRow('MAT 243', ready({ normalizedName: 'b', overallRating: 4.2, numRatings: 200 }));
     evaluateBestSections();
 
-    const chip = solid.querySelector(`[${VERDCT_BEST_CHIP_ATTRIBUTE}="rated"]`)!;
-    expect(chip.shadowRoot!.querySelector('span.chip')!.getAttribute('title')).not.toMatch(
-      /only \d+ rating/i,
-    );
+    hoverChip(solid, 'rated');
+
+    expect(tooltipPanel().textContent).not.toMatch(/only \d+ rating/i);
+  });
+
+  it('does not put a help cursor on something with no native tooltip', () => {
+    const best = addRow('MAT 243', ready({ normalizedName: 'a', overallRating: 4.6 }));
+    addRow('MAT 243', ready({ normalizedName: 'b', overallRating: 3.0 }));
+    evaluateBestSections();
+
+    const style = best.querySelector(`[${VERDCT_BEST_CHIP_ATTRIBUTE}]`)!.shadowRoot!
+      .querySelector('style')!.textContent!;
+    expect(style).not.toMatch(/cursor:\s*help/);
   });
 
   it('never lets an approximate name match win', () => {
@@ -281,10 +310,14 @@ describe('best section highlighting', () => {
     expect(awardsOn(supported)).toEqual(['overall']);
   });
 
-  it('states the ratings bar on the recommendation only', () => {
-    expect(awardExplanation('overall', 'MAT 243')).toMatch(/at least 5 ratings/i);
-    // Best rated has no floor now, so it must not claim one.
-    expect(awardExplanation('rated', 'MAT 243')).not.toMatch(/at least 5 ratings/i);
+  it('claims no eligibility bar, because there is none', () => {
+    expect(awardExplanation('rated', 'MAT 243')).not.toMatch(/at least \d+ ratings/i);
+    expect(awardExplanation('overall', 'MAT 243')).not.toMatch(/at least \d+ ratings/i);
+  });
+
+  it('adds the thin-sample caveat to either award', () => {
+    expect(awardExplanation('rated', 'MAT 243', 3)).toMatch(/only 3 ratings/i);
+    expect(awardExplanation('overall', 'MAT 243', 3)).toMatch(/only 3 ratings/i);
   });
 
   it('explains each award in terms a reader can check', () => {
@@ -295,7 +328,6 @@ describe('best section highlighting', () => {
     const chip = best.querySelector(`[${VERDCT_BEST_CHIP_ATTRIBUTE}]`)!;
     const inner = chip.shadowRoot!.querySelector('span.chip')!;
     // "Best" on its own invites the reading that it accounts for everything.
-    expect(inner.getAttribute('title')).toContain('MAT 243');
     expect(inner.getAttribute('aria-label')).toContain('MAT 243');
   });
 
@@ -412,7 +444,8 @@ describe('best section highlighting', () => {
 
     it.each([
       ['a solid high-confidence rating', {}, true],
-      ['too few ratings', { numRatings: 4 }, false],
+      ['very few ratings', { numRatings: 2 }, true],
+      ['no difficulty to balance against', { difficulty: null }, false],
       ['an approximate name match', { matchConfidence: 'low' as const }, false],
     ])('best overall: %s', (_label, overrides, expected) => {
       expect(isEligibleForOverall(rating(overrides))).toBe(expected);

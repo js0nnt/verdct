@@ -102,7 +102,7 @@ const BADGE_STYLES = `
     line-height: 16px;
     white-space: nowrap;
     vertical-align: middle;
-    cursor: help;
+    cursor: default;
     animation: verdct-badge-in 160ms ease-out;
     transition: border-color 120ms ease, box-shadow 120ms ease;
   }
@@ -123,13 +123,14 @@ const BADGE_STYLES = `
   .dot.good { background: var(--v-good); }
   .dot.fair { background: var(--v-fair); }
   .dot.poor { background: var(--v-poor); }
+  .dot.unknown { background: var(--v-text-faint); }
 
   a.unknown {
     background: transparent;
     border-style: dashed;
     border-color: var(--v-border-strong);
-    color: var(--v-text-faint);
-    font-weight: 500;
+    color: var(--v-text-muted);
+    font-weight: 600;
   }
 
   a.loading {
@@ -323,6 +324,9 @@ const POPOVER_STYLES = `
 
 export function ratingTone(rating: ProfessorRating, current: VerdctSettings = settings): BadgeTone {
   if (rating.overallRating === null || rating.numRatings === 0) return 'unknown';
+  // Too few reviews to colour-code honestly: a 4.7 from three students has not
+  // earned the same green as a 4.7 from a hundred.
+  if (rating.numRatings < LOW_SAMPLE_RATING_COUNT) return 'unknown';
   if (rating.overallRating >= current.goodRatingThreshold) return 'good';
   if (rating.overallRating >= current.fairRatingThreshold) return 'fair';
   return 'poor';
@@ -647,7 +651,9 @@ function paintBadge(handle: BadgeHandle): void {
 
   handle.button.replaceChildren();
 
-  if (tone === 'good' || tone === 'fair' || tone === 'poor') {
+  // A resolved rating always carries a dot, grey included; only "no match" and
+  // the loading state go without.
+  if (tone !== 'loading' && text !== '—') {
     handle.button.append(element('span', `dot ${tone}`));
   }
   handle.button.append(document.createTextNode(text));

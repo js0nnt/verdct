@@ -162,8 +162,9 @@ describe('badge renderer', () => {
     });
 
     const button = badgeButton(section, 'Ada Lovelace');
-    // The tone still reads normally; only the treatment signals low confidence.
-    expect(button.className).toBe('good');
+    // Grey rather than green: three students have not earned the same colour
+    // as a hundred, and the grey is what replaced the old eligibility floor.
+    expect(button.className).toBe('unknown');
     expect(button.dataset.sample).toBe('low');
     expect(button.getAttribute('aria-label')).toContain('provisional');
   });
@@ -259,8 +260,17 @@ describe('badge renderer', () => {
       [3.9, 'fair'],
       [2.5, 'fair'],
       [2.4, 'poor'],
-    ])('maps %s to %s', (overallRating, expected) => {
-      expect(ratingTone(rating({ overallRating }), DEFAULT_SETTINGS)).toBe(expected);
+    ])('maps %s to %s when well reviewed', (overallRating, expected) => {
+      expect(ratingTone(rating({ overallRating, numRatings: 40 }), DEFAULT_SETTINGS)).toBe(expected);
+    });
+
+    it('greys out any score resting on too few reviews', () => {
+      expect(ratingTone(rating({ overallRating: 4.9, numRatings: 4 }), DEFAULT_SETTINGS)).toBe(
+        'unknown',
+      );
+      expect(ratingTone(rating({ overallRating: 4.9, numRatings: 5 }), DEFAULT_SETTINGS)).toBe(
+        'good',
+      );
     });
 
     it('treats a listing with zero ratings as unknown', () => {
