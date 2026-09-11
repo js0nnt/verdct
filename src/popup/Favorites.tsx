@@ -53,8 +53,12 @@ export function Favorites() {
         </p>
       ) : (
         <ul className="mt-2 space-y-1">
-          {rows.map((row) => (
-            <li key={row.normalizedName} className="flex items-center gap-2 text-sm">
+          {rows.map((row, position) => (
+            <li
+              key={row.normalizedName}
+              style={{ animationDelay: `${Math.min(position, 8) * 30}ms` }}
+              className="v-rise flex items-center gap-2 text-sm"
+            >
               <ToneBadge
                 tone={
                   row.rating && row.rating.numRatings > 0
@@ -68,7 +72,7 @@ export function Favorites() {
                 type="button"
                 onClick={() => void handleRemove(row.normalizedName)}
                 aria-label={`Remove ${row.displayName} from favorites`}
-                className="ml-auto shrink-0 rounded px-1 text-xs text-ink-faint hover:bg-surface-sunken hover:text-ink dark:text-inkdark-faint dark:hover:bg-surface-darksunken dark:hover:text-inkdark"
+                className="ml-auto shrink-0 rounded px-1 text-xs text-ink-faint transition-colors duration-150 hover:bg-surface-sunken hover:text-ink dark:text-inkdark-faint dark:hover:bg-surface-darksunken dark:hover:text-inkdark"
               >
                 ×
               </button>
