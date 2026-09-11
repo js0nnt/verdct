@@ -69,7 +69,7 @@ export function WeekGrid({ sections }: { sections: ScheduledSection[] }) {
             >
               {layout.blocks
                 .filter((block) => block.day === day)
-                .map((block) => {
+                .map((block, position) => {
                   const top = ((block.startMinutes - layout.startMinutes) / 60) * HOUR_HEIGHT_PX;
                   const height = Math.max(
                     MINIMUM_BLOCK_PX,
@@ -84,7 +84,7 @@ export function WeekGrid({ sections }: { sections: ScheduledSection[] }) {
                         `${formatClockTime(block.endMinutes)}` +
                         (block.conflicted ? '\nOverlaps another section' : '')
                       }
-                      className={`absolute overflow-hidden rounded-[3px] border px-1 text-[8.5px] font-semibold leading-[11px] ${
+                      className={`v-block absolute overflow-hidden rounded-[3px] border px-1 text-[8.5px] font-semibold leading-[11px] transition-shadow duration-150 hover:shadow-sm ${
                         block.conflicted
                           ? 'border-tone-poor bg-tone-poor/15 text-tone-poor dark:border-tonedark-poor dark:bg-tonedark-poor/20 dark:text-tonedark-poor'
                           : 'border-tone-good bg-tone-good/12 text-tone-good dark:border-tonedark-good dark:bg-tonedark-good/20 dark:text-tonedark-good'
@@ -94,6 +94,9 @@ export function WeekGrid({ sections }: { sections: ScheduledSection[] }) {
                         height,
                         left: `${(block.lane / block.lanes) * 100}%`,
                         width: `${(1 / block.lanes) * 100}%`,
+                        // Blocks drop in down the column, so the week fills in
+                        // the way it reads rather than all at once.
+                        animationDelay: `${Math.min(position, 6) * 45}ms`,
                       }}
                     >
                       {block.courseId}

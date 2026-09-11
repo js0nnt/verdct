@@ -189,10 +189,11 @@ export function Schedule() {
             {conflicts.length} overlap{conflicts.length === 1 ? '' : 's'}
           </p>
           <ul className="mt-1 space-y-0.5">
-            {conflicts.map((conflict) => (
+            {conflicts.map((conflict, position) => (
               <li
                 key={`${conflict.left}-${conflict.right}-${conflict.day}-${conflict.startMinutes}`}
-                className="text-[10.5px] leading-4 text-ink-muted dark:text-inkdark-muted"
+                style={{ animationDelay: `${Math.min(position, 6) * 40}ms` }}
+                className="v-rise text-[10.5px] leading-4 text-ink-muted dark:text-inkdark-muted"
               >
                 {nameOf(conflict.left)} and {nameOf(conflict.right)} both meet {conflict.day}{' '}
                 {formatClockTime(conflict.startMinutes)} – {formatClockTime(conflict.endMinutes)}.
@@ -203,10 +204,13 @@ export function Schedule() {
       )}
 
       <ul className="mt-3 space-y-2">
-        {shown.map((section) => (
+        {shown.map((section, position) => (
           <li
             key={`${section.term}:${section.classNumber}`}
-            className="rounded-md border border-line px-2.5 py-2 dark:border-line-dark"
+            // Staggered by position so the list assembles downwards rather than
+            // appearing all at once, which reads as a page that simply loaded.
+            style={{ animationDelay: `${Math.min(position, 8) * 30}ms` }}
+            className="v-rise rounded-md border border-line px-2.5 py-2 transition-colors duration-200 hover:border-line-strong dark:border-line-dark dark:hover:border-line-darkstrong"
           >
             <div className="flex items-baseline gap-1.5">
               <span className="text-[12px] font-semibold">{section.courseId}</span>

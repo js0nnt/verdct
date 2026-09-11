@@ -291,7 +291,7 @@ try {
 
   await evaluate(
     popupSession,
-    `[...document.querySelectorAll('nav button')]
+    `[...document.querySelectorAll('[role="tab"]')]
       .find((button) => button.textContent === 'Schedule').click()`,
   );
 

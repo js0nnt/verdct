@@ -52,6 +52,8 @@ The MVP is complete and verified against the live ASU Class Search:
 
 - **Favorites** — the popover carries a save toggle, and the popup lists shortlisted professors joined to their cached ratings. Saving in one place updates open Class Search tabs through `chrome.storage.onChanged`. Adding this required making the popover interactive rather than a pure hover tooltip: it now stays open while the pointer is inside it, with a short close delay so moving from badge to panel does not dismiss it.
 
+- **Motion** — the tab underline travels between tabs instead of three underlines blinking on and off, panels enter from the side the tab sits on so the movement agrees with the direction the underline just went, and lists and calendar blocks stagger in rather than arriving at once. The header and tabs are held at the top by `position: sticky`, gaining a soft shadow once the content starts moving under them, and the scrollbar is a rounded pill in the same neutral palette. An inner scroll container was tried first and fought the document's own scrollbar: sizing it needed the height of everything above it as a magic number, and being a few pixels out left two scrollbars on top of each other. All of it is decoration, so `prefers-reduced-motion` removes it rather than slowing it down.
+
 - **Theme** — light / dark / auto, chosen in Settings, over one neutral palette shared between `src/content/theme.ts` and the Tailwind config. Auto follows `prefers-color-scheme` and tracks it live. The popup and the on-page popover honour the choice; badges stay light whatever the setting, since they sit inside ASU's page, which is always light, and a dark chip in a white results table would read as broken rather than as dark mode.
 
 ## Phase 3 (shipped)

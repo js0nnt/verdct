@@ -4,22 +4,159 @@
 
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  /* Both, so form controls and scrollbars follow the OS theme too. */
+  /* Both, so form controls follow the OS theme too. */
   color-scheme: light dark;
 }
 
 body {
   margin: 0;
   min-width: 20rem;
-  /* Matches the panel, so no seam shows if the popup is taller than content. */
+}
+
+/*
+ * Painted on the root as well as the body. A vertical scrollbar makes Chrome
+ * widen the popup past the panel, and without this the strip beside it is the
+ * browser's own canvas — which under a dark OS theme is black, reading as a
+ * broken edge on a light popup.
+ */
+html,
+body {
   background: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
+  html,
   body { background: #262626; }
 }
+
+:root[data-theme="light"],
+:root[data-theme="light"] body { background: #ffffff; }
+
+:root[data-theme="dark"],
+:root[data-theme="dark"] body { background: #262626; }
 
 /* The one saturated element in the palette, matching the extension mark. */
 .verdct-mark {
   background-image: linear-gradient(135deg, #f4304a, #ff2e7e);
+}
+
+/*
+ * The popup scrolls as one document, with the header and tabs held at the top
+ * by `position: sticky`. An inner scroll container was tried first and fought
+ * the document's own scrollbar: sizing it needed the height of everything above
+ * it as a magic number, and being a few pixels out left two scrollbars on top
+ * of each other.
+ *
+ * The scrollbar is styled through the -webkit- pseudo-elements rather than the
+ * standard `scrollbar-color`, which cannot round a thumb or give it a hover
+ * state. The two cannot be mixed: where both are set, Chrome honours the
+ * standard property and drops this styling entirely.
+ */
+html {
+  scroll-behavior: smooth;
+  /* A panel sliding in reaches past the edge for a moment, and without this
+     that shows as a horizontal scrollbar for the length of the animation. */
+  overflow-x: hidden;
+}
+
+html::-webkit-scrollbar {
+  width: 10px;
+}
+
+html::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/*
+ * The transparent border plus `background-clip` is what makes the thumb read as
+ * a floating 4px pill rather than a full-width bar: the border is padding the
+ * paint cannot reach.
+ */
+html::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-color: #dcdcdc;
+  background-clip: content-box;
+}
+
+html::-webkit-scrollbar-thumb:hover {
+  background-color: #b8b8b8;
+}
+
+:root[data-theme="dark"]::-webkit-scrollbar-thumb {
+  background-color: #3d3d3d;
+}
+
+:root[data-theme="dark"]::-webkit-scrollbar-thumb:hover {
+  background-color: #585858;
+}
+
+/* The popup opens abruptly otherwise, since Chrome paints it fully formed. */
+.v-app {
+  animation: v-fade 180ms ease-out;
+}
+
+/*
+ * Panels enter from the side the tab sits on, so the movement agrees with the
+ * direction the underline just travelled. Going the other way would read as the
+ * content and the tabs disagreeing about what happened.
+ */
+.v-panel-right {
+  animation: v-slide-from-right 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.v-panel-left {
+  animation: v-slide-from-left 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* List items, staggered by an inline animation-delay from their index. */
+.v-rise {
+  animation: v-rise 260ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+}
+
+/* Calendar blocks grow down from the hour they start at. */
+.v-block {
+  animation: v-block 240ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+  transform-origin: top center;
+}
+
+@keyframes v-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes v-slide-from-right {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes v-slide-from-left {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes v-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes v-block {
+  from { opacity: 0; transform: scaleY(0.6); }
+  to { opacity: 1; transform: none; }
+}
+
+/*
+ * Everything above is decoration. Someone who has asked their system for less
+ * motion gets the same interface without any of it, rather than a slower
+ * version of it.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

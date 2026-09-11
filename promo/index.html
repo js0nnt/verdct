@@ -75,8 +75,11 @@
 
       .stage .popup-frame {
         border-radius: 14px; overflow: hidden; flex: none;
-        /* Clipped like a real popup, and bounded so it never crowds the copy. */
-        max-height: 500px;
+        /* Bounded by the row it sits in, not by a fixed number. At 500px it
+           was taller than the space the copy left it, and being centred it
+           overflowed both ways at once — printing the frame over the subhead
+           above it and the footnote below. */
+        max-height: 100%;
         border: 1px solid #e2e2e2;
         box-shadow: 0 24px 60px rgba(15, 15, 15, 0.22), 0 2px 8px rgba(15, 15, 15, 0.1);
       }
