@@ -51,6 +51,7 @@ function addRow(courseId: string, state: BadgeState): HTMLElement {
     professorName: state.status === 'ready' ? state.rating.displayName : 'Unknown',
     rowElement: row,
     instructorElement: instructor,
+    details: null,
   };
   recordSection(section, state);
   return row;

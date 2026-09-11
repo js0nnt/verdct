@@ -30,7 +30,7 @@ Then load `dist/` via **Load unpacked** as above. `npm run package` builds and z
 
 The MVP is complete and verified against the live ASU Class Search:
 
-- **Scanning** — `src/content/domScanner.ts` extracts `{ professorName, courseId }` per result row. A debounced `MutationObserver` re-scans on paginated and lazy-loaded results, and ignores Verdct's own injected DOM so rendering cannot retrigger a scan.
+- **Scanning** — `src/content/domScanner.ts` reads each result row once, yielding one badge entry per professor listed and one section record for the row itself. A debounced `MutationObserver` re-scans on paginated and lazy-loaded results, and ignores Verdct's own injected DOM so rendering cannot retrigger a scan.
 - **Badges** — `src/content/badgeRenderer.ts` injects a Shadow DOM badge after each instructor link: a neutral pill whose only colour is a 5px tone dot — green at or above 4.0, amber 2.5–3.9, red below 2.5, and a quiet dashed outline when no confident match was found. A small patch of colour reads as a signal where a filled pill, times seventeen rows, reads as noise. Hovering or focusing a badge opens a popover with the rating, difficulty and would-take-again bars, and the rating count. Popover content is built from DOM nodes rather than `innerHTML`, since professor names come from untrusted page and API text.
 - **Sample size is visible** — a rating resting on fewer than 5 reviews is drawn **grey**, with a dashed border and its review count inline, as `4.7 (3)`. Colour-coding a 4.7 from three students the same green as a 4.7 from a hundred would claim a confidence the data has not earned. The dashed border alone was too quiet: a thinly-reviewed 4.7 looked like a peer of a well-reviewed 4.4, so losing a best-section award to it read as a bug rather than as thin evidence. `src/content/awardRace.test.ts` pins that awards settle on the true winner regardless of the order lookups resolve in.
 - **Lookups** — `src/background/rmpClient.ts` queries RateMyProfessor's GraphQL endpoint scoped to ASU's school ID, with defensive parsing and a minimum interval between requests. `src/background/nameMatcher.ts` reconciles ASU's "Last, First" formatting with RMP's "First Last" and returns an explicit no-match rather than guessing.
@@ -43,7 +43,7 @@ The MVP is complete and verified against the live ASU Class Search:
 
 - **Two best-section awards** — `src/content/bestSection.ts` groups rows by course and marks winners with a green accent and a label. **Best rated** is the highest raw score and says so: it does not account for workload, so a demanding grader with devoted students can hold it. **Best overall** discounts a rating by how far difficulty sits above the middle of the scale, so it names the better balance. They often land on different sections, which is the point — one label claiming to mean both was misleading. Neither award has a review floor: both are judged purely on their score, and a thinly-reviewed rating is marked on the badge itself rather than being silently excluded. Hiding the reason inside an eligibility rule made a correct ranking look broken. Neither award can be carried by a guessed name match. `src/content/awardRace.test.ts` pins that awards settle on the true winner regardless of the order lookups resolve in. Winning takes stronger evidence than a badge does: only high-confidence matches with at least 5 ratings are eligible, so a 4.7 from 3 students never outranks a 4.5 from 200. A course with one rated professor is left unmarked, and ties all win rather than picking arbitrarily.
 
-- **Popup** — two tabs. **Overview** carries the comparison chart and favorites; **Settings** carries the theme toggle, cache TTL, badge thresholds on live sliders that preview the real badge styling, the cached-professor count, and a clear-cache button. Threshold changes restyle open Class Search tabs immediately via `chrome.storage.onChanged`. Stored settings are user-editable and survive upgrades, so every field is re-validated on read; the two thresholds are bounded by each other so the band can never invert.
+- **Popup** — **Overview** carries the comparison chart and favorites; **Settings** carries the theme toggle, cache TTL, badge thresholds on live sliders that preview the real badge styling, the cached-professor count, and a clear-cache button. Threshold changes restyle open Class Search tabs immediately via `chrome.storage.onChanged`. Stored settings are user-editable and survive upgrades, so every field is re-validated on read; the two thresholds are bounded by each other so the band can never invert.
 
 - **Quality-vs-difficulty scatter** — lives in the popup's Overview tab. The content script reports rated professors per course to the background worker, which keeps them per tab in `chrome.storage.session`; the popup charts the active tab's course, with pills when a result set spans several. Layout maths sits in `src/shared/scatterGeometry.ts`: dot size reflects how many reviews back each point, corners are captioned so the axes need no decoding, and labels prefer above a dot, fall back to below, and are dropped rather than printed over a neighbour or outside the plot.
 - **Toolbar badge** — the extension icon shows how many rated professors the current tab has to compare. This is the attention signal, because Chrome does not let an extension open its own popup in response to page activity (see Known constraints).
@@ -54,16 +54,31 @@ The MVP is complete and verified against the live ASU Class Search:
 
 - **Theme** — light / dark / auto, chosen in Settings, over one neutral palette shared between `src/content/theme.ts` and the Tailwind config. Auto follows `prefers-color-scheme` and tracks it live. The popup and the on-page popover honour the choice; badges stay light whatever the setting, since they sit inside ASU's page, which is always light, and a dark chip in a white results table would read as broken rather than as dark mode.
 
+## Phase 3 (shipped)
+
+- **Schedule builder** — every result row gets a **+ Plan** control beside its class number, and the popup's **Schedule** tab draws the week those choices make. It says *Plan* rather than *Add* because ASU's own maroon **Add** button on the same row enrols you in the class; a second control saying Add would read as the same act.
+
+- **The class number is the identity.** Sections are keyed on ASU's class number, which is the only thing separating two sections of the same course taught by the same professor — the exact case a schedule has to get right. A class number is only unique within a term, so the stored key is term plus class number, and sections from different terms never compare. `src/content/domScanner.ts` reads it from the number cell's own `id` rather than its text, since that text also carries the "Syllabus" link.
+
+- **Overlaps are named before they happen.** A row whose meeting time clashes with something already planned turns amber and says what it clashes with, so the warning arrives while you are still choosing rather than after. `src/shared/schedule.ts` compares day and time, and also the session date range: ASU's A and B sessions each run half a term, so a 9am Monday class in the first half genuinely does not clash with a 9am Monday class in the second. Classes that merely touch — one ending exactly when the next begins — do not count, and a clash on both Monday and Wednesday is reported as two problems rather than one.
+
+- **The week grid** — `src/shared/scheduleLayout.ts` places blocks by minute and packs overlapping ones into side-by-side lanes, so a clash reads as two narrow blocks rather than one hiding the other. Days between the first and last used are drawn even when empty, because a free Wednesday between Tuesday and Thursday classes is worth seeing; days outside that span are not, since an empty Friday column at the edge only makes every block narrower. Asynchronous sections leave no mark on a calendar, so they are listed below it with a note saying how many are missing from the grid rather than being silently dropped.
+
+- **What a row actually said** — days, times, location, session dates, units and open seats are parsed from the rendered row, with ASU's screen-reader labels stripped first. Anything unreadable is stored as null rather than guessed at, and a variable-unit section keeps its range so the unit total can show `13–15` instead of a number that is only half true.
+
+- **A fix this uncovered.** Reading the instructor cell's raw text turned ASU's real `<span class="sr-only">Instructor: </span>Staff` markup into a professor named "Instructor: Staff" — badged, and given a RateMyProfessor lookup of its own. The old fixture omitted the label, so the bug was invisible in tests while being live on every Staff row. Placeholder instructors are now matched against the visible text, and "Select instructor during enrollment" was added to the list.
+
 Only aggregate numbers are stored. No review text, reviewer data, or browsing activity is collected or transmitted.
 
 ## Verification
 
 | Command | What it proves |
 | --- | --- |
-| `npm test` | 188 unit tests across the scanner, matcher, RMP parser, cache, and badge renderer. |
+| `npm test` | 292 unit tests across the scanner, matcher, RMP parser, cache, badge renderer, schedule conflicts, and week layout. |
 | `npm run typecheck` | Strict TypeScript across all entry points. |
 | `npm run validate:chrome` | Loads the built extension in a disposable headless Chrome profile: the service worker starts, the popup renders without errors, a live RMP lookup succeeds, and a repeat lookup in ASU's `"Last, First"` format is served from cache without a second fetch, the settings controls render, and a saved favorite is listed with the rating joined from cache, the Settings tab renders its controls, the theme override beats the OS setting, and the Overview chart plots every seeded professor. Set `VERDCT_SCREENSHOT=<path>` to capture the popup for design review. |
 | `npm run validate:asu` | Drives the live ASU Class Search and asserts every result row receives a badge that resolves out of its loading state, including a dynamically inserted row. |
+| `npm run validate:schedule` | Drives the schedule builder end to end on the live page: every row gets a Plan control, a stored section makes exactly the rows it overlaps warn by name, clicking Plan stores what the row showed, clicking again removes it, and the popup draws the week and reports the clash. Set `VERDCT_SCREENSHOT=<path>` to capture the popup and the results page for design review. |
 | `npm run package` | Builds and zips the extension into `verdct-<version>.zip` for a GitHub Release. Set `VERDCT_EXTENSION_DIR` on `validate:chrome` to verify the unpacked archive itself loads. |
 | `npm run promo` | Captures every Chrome Web Store listing asset into `promo-out/`: four 1280x800 screenshots, plus the 440x280 and 1400x560 promo tiles as alpha-free JPEG. Screenshots mount the real badge renderer and popup, so the listing shows shipping UI. Needs `npx vite --config vite.config.promo.ts` running. |
 | `npm run preview:badges` | Opens a design harness at `localhost:5199` rendering the real badge module against mock ASU rows in every state — rated, provisional, unmatched, loading, failed. Use it to iterate on badge styling without a live search. |
@@ -71,7 +86,7 @@ Only aggregate numbers are stored. No review text, reviewer data, or browsing ac
 
 Set `CHROME_PATH` when Chrome is installed outside its default Windows location. `validate:asu` defaults to Fall 2026 MAT 243; set `ASU_TEST_URL` to target a different current result page.
 
-Latest `validate:asu` run: 17 of 17 rows badged in **3.9s cold-cache** (was 15.8s), 0 unresolved, 7 trend arrows, 14 of 14 rated badges linked to RMP, 1 best section highlighted, 0 page errors. `validate:asu` reports `secondsToAllBadges`, so a performance regression shows up as a number rather than a feeling.
+Latest `validate:asu` run: 17 of 17 rows badged in **4.3s cold-cache** (was 15.8s), 0 unresolved, 7 trend arrows, 1 best section highlighted, 0 page errors. Latest `validate:schedule` run: 17 of 17 rows given a Plan control, 1 of 17 warning about the seeded overlap, and the popup drawing both sections with the clash marked on both days it falls on. `validate:asu` reports `secondsToAllBadges`, so a performance regression shows up as a number rather than a feeling.
 
 ## Known constraints
 
@@ -83,7 +98,7 @@ Latest `validate:asu` run: 17 of 17 rows badged in **3.9s cold-cache** (was 15.8
 
 ## Not yet built
 
-Phase 3 (sentiment tags, seat alerts, alternate-section recommender)..
+Sentiment tags, seat alerts, and an alternate-section recommender.
 
 ## Privacy
 

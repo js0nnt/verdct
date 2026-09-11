@@ -41,7 +41,7 @@ function buildSection(professorName = 'Ada Lovelace'): ScannedClassSection {
   `;
   const rowElement = document.querySelector<HTMLElement>('.class-accordion')!;
   const instructorElement = document.querySelector<HTMLElement>('.instructor')!;
-  return { courseId: 'MAT 243', professorName, rowElement, instructorElement };
+  return { courseId: 'MAT 243', professorName, rowElement, instructorElement, details: null };
 }
 
 function badgeButton(section: ScannedClassSection, professorName: string): HTMLAnchorElement {
@@ -144,6 +144,7 @@ describe('badge renderer', () => {
       professorName: 'Ada Lovelace',
       rowElement: document.querySelector<HTMLElement>('.class-accordion')!,
       instructorElement,
+      details: null,
     };
 
     upsertBadge(section, { status: 'ready', rating: rating() });

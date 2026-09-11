@@ -1,9 +1,11 @@
 import {
   FAVORITES_STORAGE_KEY,
   LOOKUP_PROFESSOR_MESSAGE,
+  SCHEDULE_STORAGE_KEY,
   SETTINGS_STORAGE_KEY,
 } from '../shared/constants';
 import { parseFavorites, readFavorites } from '../shared/favorites';
+import { parseSchedule, readSchedule, termFromSearch } from '../shared/schedule';
 import { coerceSettings, readSettings } from '../shared/settings';
 import type {
   LookupProfessorMessage,
@@ -19,8 +21,10 @@ import {
   type BadgeState,
 } from './badgeRenderer';
 import { evaluateBestSections, recordSection } from './bestSection';
-import { scanClassSections, type ScannedClassSection } from './domScanner';
+import { scanRows, type ScannedClassSection } from './domScanner';
 import { recordCoursePoint, scheduleCourseReport } from './courseReporter';
+import { configureSchedule, upsertScheduleControl } from './scheduleControl';
+import { configureTooltipTheme } from './tooltip';
 
 const RESCAN_DELAY_MS = 100;
 
@@ -93,12 +97,31 @@ function renderSection(section: ScannedClassSection): void {
   });
 }
 
+/**
+ * Which term the results on screen belong to. A class number is only unique
+ * within a term, so a section cannot be scheduled without one; the row's
+ * syllabus link carries it when the URL somehow does not.
+ */
+function currentTerm(rows: ReturnType<typeof scanRows>): string | null {
+  const fromUrl = termFromSearch(window.location.search);
+  if (fromUrl) return fromUrl;
+  return rows.find((row) => row.details?.termHint)?.details?.termHint ?? null;
+}
+
 function scanAndRender(): void {
   scheduledScan = undefined;
   const started = performance.now();
 
-  for (const section of scanClassSections()) {
-    renderSection(section);
+  const rows = scanRows();
+  const term = currentTerm(rows);
+
+  for (const row of rows) {
+    if (term && row.details) {
+      upsertScheduleControl(row.rowElement, row.details, term);
+    }
+    for (const section of row.sections) {
+      renderSection(section);
+    }
   }
 
   // Newly scanned rows change which section wins, even when every rating for
@@ -140,10 +163,12 @@ observer.observe(document.documentElement, {
 void readSettings().then((settings) => {
   configureBadges(settings);
   configureTheme(settings.theme);
+  configureTooltipTheme(settings.theme);
 });
 void readFavorites().then((favorites) => {
   configureFavorites(new Set(favorites.map((favorite) => favorite.normalizedName)));
 });
+void readSchedule().then(configureSchedule);
 
 // Threshold changes in the popup repaint open Class Search tabs immediately.
 chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -153,6 +178,13 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     const settings = coerceSettings(changes[SETTINGS_STORAGE_KEY].newValue);
     configureBadges(settings);
     configureTheme(settings.theme);
+    configureTooltipTheme(settings.theme);
+  }
+
+  // Removing a section in the popup has to clear the row's "Added" state, and
+  // every other row's clash warning along with it.
+  if (changes[SCHEDULE_STORAGE_KEY]) {
+    configureSchedule(parseSchedule(changes[SCHEDULE_STORAGE_KEY].newValue));
   }
 
   // Favoriting in the popup, or in another tab, is reflected here too.

@@ -3,13 +3,15 @@ import { useEffect, useState } from 'react';
 import { DEFAULT_SETTINGS, readSettings } from '../shared/settings';
 import type { VerdctSettings } from '../shared/types';
 import { Home } from './Home';
+import { Schedule } from './Schedule';
 import { Settings } from './Settings';
 import { useTheme } from './useTheme';
 
-type Tab = 'home' | 'settings';
+type Tab = 'home' | 'schedule' | 'settings';
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'home', label: 'Overview' },
+  { id: 'schedule', label: 'Schedule' },
   { id: 'settings', label: 'Settings' },
 ];
 
@@ -52,9 +54,9 @@ export function App() {
       </nav>
 
       <div className="px-5 pb-5 pt-4">
-        {tab === 'home' ? (
-          <Home />
-        ) : (
+        {tab === 'home' && <Home />}
+        {tab === 'schedule' && <Schedule />}
+        {tab === 'settings' && (
           <Settings settings={settings} onSettingsChange={setSettings} />
         )}
       </div>

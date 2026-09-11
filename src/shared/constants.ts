@@ -48,9 +48,17 @@ export const MAX_CONCURRENT_RMP_REQUESTS = 4;
 export const CACHE_STORAGE_KEY = 'verdct:ratings';
 export const SETTINGS_STORAGE_KEY = 'verdct:settings';
 export const FAVORITES_STORAGE_KEY = 'verdct:favorites';
+export const SCHEDULE_STORAGE_KEY = 'verdct:schedule';
 
 /** Plenty for a semester of shortlisting, and bounds what the popup renders. */
 export const FAVORITES_LIMIT = 100;
+
+/**
+ * A full load is five or six sections, and comparing two or three candidates
+ * for each still fits well under this. The cap only exists so a runaway write
+ * cannot fill storage.
+ */
+export const SCHEDULE_LIMIT = 40;
 
 /** Ratings at or above this score render green; below GOOD, at or above FAIR renders yellow. */
 export const DEFAULT_GOOD_RATING_THRESHOLD = 4;
@@ -67,7 +75,10 @@ export const VERDCT_POPOVER_ATTRIBUTE = 'data-verdct-popover-layer';
 export const VERDCT_BEST_ATTRIBUTE = 'data-verdct-best';
 export const VERDCT_BEST_CHIP_ATTRIBUTE = 'data-verdct-best-chip';
 export const VERDCT_TOOLTIP_ATTRIBUTE = 'data-verdct-tooltip';
+/** The add-to-schedule control injected into each row's class-number cell. */
+export const VERDCT_SCHEDULE_ATTRIBUTE = 'data-verdct-schedule';
 
 export const VERDCT_INJECTED_SELECTOR =
   `[${VERDCT_BADGE_ATTRIBUTE}], [${VERDCT_POPOVER_ATTRIBUTE}], ` +
-  `[${VERDCT_BEST_CHIP_ATTRIBUTE}], [${VERDCT_TOOLTIP_ATTRIBUTE}]`;
+  `[${VERDCT_BEST_CHIP_ATTRIBUTE}], [${VERDCT_TOOLTIP_ATTRIBUTE}], ` +
+  `[${VERDCT_SCHEDULE_ATTRIBUTE}]`;

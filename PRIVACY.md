@@ -28,10 +28,13 @@ Everything is stored locally in your own browser, using `chrome.storage`. None o
 | --- | --- | --- | --- |
 | Professor rating aggregates — score, difficulty, would-take-again, rating count, trend | `storage.local` | So a revisited page is instant instead of refetching | "Clear cached ratings" in Settings; also expires after the configured TTL (7 days by default) |
 | Favorited professors — name only | `storage.local` | Your shortlist in the popup | Removing them individually in the popup |
+| Planned sections — class number, term, course, instructor names, meeting times, location, units, seats | `storage.local` | Your schedule in the popup | "Clear all" in the Schedule tab, or removing them one at a time |
 | Your settings — theme, TTL, badge thresholds | `storage.local` | To remember your preferences | Uninstalling |
 | Rated professors on the current tab | `storage.session` | To draw the comparison chart | Automatically, when the tab navigates or closes, and when the browser closes |
 
 **No review text is ever stored**, and nothing about the people who wrote reviews. Only aggregate numbers (`src/shared/types.ts`).
+
+A planned section holds only what the ASU results row already displayed publicly. It never leaves your browser: the schedule is read and written by the popup and the content script, and no request carries it anywhere.
 
 Verdct does not read your browsing history, your other tabs, or anything outside ASU Class Search. Its content script is scoped to `catalog.apps.asu.edu/catalog/classes/*`, and it requests only the `storage` permission — not the broad `tabs` permission, which would grant access to every tab's address.
 
