@@ -17,7 +17,10 @@ function makeRow(): ScannedClassSection {
   const row = document.createElement('div');
   const cell = document.createElement('div');
   row.append(cell); results.append(row);
-  return { courseId: 'MAT 343', professorName: 'p', rowElement: row, instructorElement: cell };
+  return {
+    courseId: 'MAT 343', professorName: 'p', rowElement: row, instructorElement: cell,
+    details: null,
+  };
 }
 function awardsOn(s: ScannedClassSection): string[] {
   return [...s.rowElement.querySelectorAll(`[${VERDCT_BEST_CHIP_ATTRIBUTE}]`)]

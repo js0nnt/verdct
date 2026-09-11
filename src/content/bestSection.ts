@@ -2,13 +2,13 @@ import {
   MIN_CONFIDENT_RATINGS,
   VERDCT_BEST_ATTRIBUTE,
   VERDCT_BEST_CHIP_ATTRIBUTE,
-  VERDCT_TOOLTIP_ATTRIBUTE,
 } from '../shared/constants';
 import type { ProfessorRating } from '../shared/types';
 import type { BadgeState } from './badgeRenderer';
 import { configureAwards } from './badgeRenderer';
 import type { ScannedClassSection } from './domScanner';
-import { EMBEDDED_TOKENS, FLOATING_TOKENS } from './theme';
+import { EMBEDDED_TOKENS } from './theme';
+import { hideTooltip, showTooltip } from './tooltip';
 
 export { VERDCT_BEST_ATTRIBUTE, VERDCT_BEST_CHIP_ATTRIBUTE };
 
@@ -191,83 +191,6 @@ const CHIP_STYLES = `
      greyed chip read as disabled rather than as the weaker of two claims. */
 `;
 
-const TOOLTIP_STYLES = `
-  :host { all: initial; }
-  ${FLOATING_TOKENS}
-
-  .tip {
-    position: fixed;
-    z-index: 2147483647;
-    box-sizing: border-box;
-    max-width: 240px;
-    padding: 8px 10px;
-    border: 1px solid var(--v-border);
-    border-radius: 8px;
-    background: var(--v-surface);
-    color: var(--v-text);
-    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-    font-size: 11.5px;
-    line-height: 1.4;
-    box-shadow: 0 8px 22px var(--v-shadow-strong);
-    pointer-events: none;
-  }
-  .tip[hidden] { display: none; }
-  .tip b { display: block; margin-bottom: 3px; font-size: 11px; }
-`;
-
-let tooltipPanel: HTMLElement | null = null;
-
-/**
- * A real tooltip rather than a title attribute. The chip advertised an
- * explanation with a help cursor, but the native tooltip never appeared
- * reliably from inside a shadow root, so the promise went unmet.
- */
-function tooltip(): HTMLElement {
-  if (tooltipPanel?.isConnected) return tooltipPanel;
-
-  const host = document.createElement('div');
-  host.setAttribute(VERDCT_TOOLTIP_ATTRIBUTE, '');
-  const shadow = host.attachShadow({ mode: 'open' });
-  const style = document.createElement('style');
-  style.textContent = TOOLTIP_STYLES;
-  const panel = document.createElement('div');
-  panel.className = 'tip';
-  panel.setAttribute('role', 'tooltip');
-  panel.hidden = true;
-  shadow.append(style, panel);
-  document.body.append(host);
-
-  tooltipPanel = panel;
-  return panel;
-}
-
-const TOOLTIP_GAP_PX = 8;
-
-function showTooltip(anchor: HTMLElement, title: string, body: string): void {
-  const panel = tooltip();
-  panel.replaceChildren();
-  const heading = document.createElement('b');
-  heading.textContent = title;
-  panel.append(heading, document.createTextNode(body));
-  panel.hidden = false;
-
-  const rect = anchor.getBoundingClientRect();
-  const panelRect = panel.getBoundingClientRect();
-  const below = rect.bottom + TOOLTIP_GAP_PX + panelRect.height <= window.innerHeight;
-
-  panel.style.top = `${
-    below ? rect.bottom + TOOLTIP_GAP_PX : Math.max(TOOLTIP_GAP_PX, rect.top - panelRect.height - TOOLTIP_GAP_PX)
-  }px`;
-  panel.style.left = `${Math.max(
-    TOOLTIP_GAP_PX,
-    Math.min(rect.left, window.innerWidth - panelRect.width - TOOLTIP_GAP_PX),
-  )}px`;
-}
-
-function hideTooltip(): void {
-  if (tooltipPanel) tooltipPanel.hidden = true;
-}
-
 function chipHost(kind: AwardKind, courseId: string, thinSample: number | null): HTMLElement {
   const host = document.createElement('span');
   host.setAttribute(VERDCT_BEST_CHIP_ATTRIBUTE, kind);
@@ -392,6 +315,5 @@ export function evaluateBestSections(): void {
 export function resetBestSectionsForTests(): void {
   trackedRows.clear();
   styleInjected = false;
-  tooltipPanel = null;
   configureAwards(new Map());
 }

@@ -1,7 +1,7 @@
 {
   "name": "verdct",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,6 +13,7 @@
     "test": "vitest run",
     "validate:chrome": "node scripts/validate-chrome.mjs",
     "validate:asu": "node scripts/validate-asu.mjs",
+    "validate:schedule": "node scripts/validate-schedule.mjs",
     "inspect:rmp": "node scripts/inspect-rmp.mjs"
   },
   "dependencies": {

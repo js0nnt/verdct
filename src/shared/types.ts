@@ -1,6 +1,14 @@
 import type { ScatterPoint } from './scatterGeometry';
+import type {
+  Meeting,
+  ScheduleConflict,
+  ScheduledSection,
+  SectionDates,
+  Weekday,
+} from './schedule';
 
 export type { ScatterPoint };
+export type { Meeting, ScheduleConflict, ScheduledSection, SectionDates, Weekday };
 
 /** Direction of a professor's recent reviews against their older ones. */
 export type RatingTrend = 'rising' | 'falling' | 'steady';
