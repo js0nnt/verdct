@@ -14,29 +14,7 @@ Verdct is a Chrome extension that shows RateMyProfessor ratings right inside ASU
 
 ## Install
 
-1. Download `verdct-<version>.zip` from [Releases](https://github.com/js0nnt/verdct/releases) and unzip it.
-2. Go to `chrome://extensions` and turn on **Developer mode**.
-3. Click **Load unpacked** and pick the unzipped folder.
-4. Search for classes on [ASU Class Search](https://catalog.apps.asu.edu/catalog/classes).
-
-## Build from source
-
-Needs Node.js 20 or newer.
-
-```bash
-npm install
-npm run build
-```
-
-Then load the `dist/` folder with **Load unpacked**. Run `npm run package` to make a zip.
-
-## Tests
-
-```bash
-npm test
-```
-
-`npm run typecheck` checks types. `npm run validate:chrome`, `validate:asu`, and `validate:schedule` test the extension in a real Chrome.
+Get it from the [Chrome Web Store](https://chromewebstore.google.com/detail/verdct/gobbgdoekbingholbokfkhfnfbaojfbj).
 
 ## Privacy
 
