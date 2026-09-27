@@ -1,111 +1,47 @@
 # Verdct
 
-Verdct is a Manifest V3 Chrome extension that shows RateMyProfessor summaries directly in ASU Class Search.
+Verdct is a Chrome extension that shows RateMyProfessor ratings right inside ASU Class Search.
+
+## What it does
+
+- **Rating badges** next to each professor. Green is good, amber is okay, red is low. Grey means there are too few reviews to trust, or no match was found.
+- **Hover a badge** to see rating, difficulty, would-take-again, and review count. Click it to open the professor's RateMyProfessor page.
+- **Best section labels** mark the best sections of each course: "Best rated" (highest rating) and "Best overall" (good rating, not too hard).
+- **Trend arrows** (▲ ▼) show if a professor's recent reviews are better or worse than older ones.
+- **Favorites** let you save professors to a shortlist.
+- **Schedule builder**: click **+ Plan** on a class to add it to a weekly calendar in the popup. Classes that overlap turn amber.
+- **Popup** with a rating vs. difficulty chart, your favorites, your schedule, and settings (theme, colors, cache).
 
 ## Install
 
-### Just want to use it
-
 1. Download `verdct-<version>.zip` from [Releases](https://github.com/js0nnt/verdct/releases) and unzip it.
-2. Open `chrome://extensions` and enable **Developer mode** (top right).
-3. Click **Load unpacked** and select the unzipped folder.
-4. Open [ASU Class Search](https://catalog.apps.asu.edu/catalog/classes) and run a course search. A badge appears next to each instructor.
+2. Go to `chrome://extensions` and turn on **Developer mode**.
+3. Click **Load unpacked** and pick the unzipped folder.
+4. Search for classes on [ASU Class Search](https://catalog.apps.asu.edu/catalog/classes).
 
-No Node.js needed — the release archive is already built.
+## Build from source
 
-### Build from source
-
-Requires Node.js 20+.
+Needs Node.js 20 or newer.
 
 ```bash
 npm install
-npm run build     # outputs dist/
+npm run build
 ```
 
-Then load `dist/` via **Load unpacked** as above. `npm run package` builds and zips it into a release archive.
+Then load the `dist/` folder with **Load unpacked**. Run `npm run package` to make a zip.
 
-`dist/` is intentionally not committed. It is generated output, and a checked-in copy silently goes stale the moment someone edits source without rebuilding — leaving anyone who cloned the repo running code that does not match it. Releases are built from a known commit instead, and `npm run validate:chrome` can be pointed at an unpacked archive with `VERDCT_EXTENSION_DIR` to prove the artifact people actually download is the one that works.
+## Tests
 
-## Phase 1 (shipped)
+```bash
+npm test
+```
 
-The MVP is complete and verified against the live ASU Class Search:
-
-- **Scanning** — `src/content/domScanner.ts` reads each result row once, yielding one badge entry per professor listed and one section record for the row itself. A debounced `MutationObserver` re-scans on paginated and lazy-loaded results, and ignores Verdct's own injected DOM so rendering cannot retrigger a scan.
-- **Badges** — `src/content/badgeRenderer.ts` injects a Shadow DOM badge after each instructor link: a neutral pill whose only colour is a 5px tone dot — green at or above 4.0, amber 2.5–3.9, red below 2.5, and a quiet dashed outline when no confident match was found. A small patch of colour reads as a signal where a filled pill, times seventeen rows, reads as noise. Hovering or focusing a badge opens a popover with the rating, difficulty and would-take-again bars, and the rating count. Popover content is built from DOM nodes rather than `innerHTML`, since professor names come from untrusted page and API text.
-- **Sample size is visible** — a rating resting on fewer than 5 reviews is drawn **grey**, with a dashed border and its review count inline, as `4.7 (3)`. Colour-coding a 4.7 from three students the same green as a 4.7 from a hundred would claim a confidence the data has not earned. The dashed border alone was too quiet: a thinly-reviewed 4.7 looked like a peer of a well-reviewed 4.4, so losing a best-section award to it read as a bug rather than as thin evidence. `src/content/awardRace.test.ts` pins that awards settle on the true winner regardless of the order lookups resolve in.
-- **Lookups** — `src/background/rmpClient.ts` queries RateMyProfessor's GraphQL endpoint scoped to ASU's school ID, with defensive parsing and a minimum interval between requests. `src/background/nameMatcher.ts` reconciles ASU's "Last, First" formatting with RMP's "First Last" and returns an explicit no-match rather than guessing.
-- **Caching** — `src/background/cache.ts` stores aggregates in `chrome.storage.local` keyed by normalized name, with a 7-day TTL, a shorter 1-day TTL for no-match results, an LRU cap of 500 entries, and serialized writes. Identical in-flight lookups share one request, so a page listing the same professor eight times costs one fetch. A revisited page is effectively instant.
-- **Request concurrency** — up to 4 RMP requests in flight, 120ms apart. Strict serialization at 750ms made a cold page take ~16 seconds: seventeen rows resolve to sixteen requests, each waiting for the previous to finish before its own delay even began. The same page now settles in under 4 seconds.
-- **Click through to RateMyProfessor** — the badge is an anchor to `ratemyprofessors.com/professor/<legacyId>`, so middle-click, open-in-new-tab and copy-link all behave normally. Only a matched professor gets an href; an unmatched badge stays focusable for the popover but does not pretend to link anywhere.
-- **Graceful degradation** — network failures, schema changes, corrupt cache records, and missing matches all fall back to a neutral gray badge. Nothing throws into ASU's page.
-
-## Phase 2 (shipped)
-
-- **Two best-section awards** — `src/content/bestSection.ts` groups rows by course and marks winners with a green accent and a label. **Best rated** is the highest raw score and says so: it does not account for workload, so a demanding grader with devoted students can hold it. **Best overall** discounts a rating by how far difficulty sits above the middle of the scale, so it names the better balance. They often land on different sections, which is the point — one label claiming to mean both was misleading. Neither award has a review floor: both are judged purely on their score, and a thinly-reviewed rating is marked on the badge itself rather than being silently excluded. Hiding the reason inside an eligibility rule made a correct ranking look broken. Neither award can be carried by a guessed name match. `src/content/awardRace.test.ts` pins that awards settle on the true winner regardless of the order lookups resolve in. Winning takes stronger evidence than a badge does: only high-confidence matches with at least 5 ratings are eligible, so a 4.7 from 3 students never outranks a 4.5 from 200. A course with one rated professor is left unmarked, and ties all win rather than picking arbitrarily.
-
-- **Popup** — **Overview** carries the comparison chart and favorites; **Settings** carries the theme toggle, cache TTL, badge thresholds on live sliders that preview the real badge styling, the cached-professor count, and a clear-cache button. Threshold changes restyle open Class Search tabs immediately via `chrome.storage.onChanged`. Stored settings are user-editable and survive upgrades, so every field is re-validated on read; the two thresholds are bounded by each other so the band can never invert.
-
-- **Quality-vs-difficulty scatter** — lives in the popup's Overview tab. The content script reports rated professors per course to the background worker, which keeps them per tab in `chrome.storage.session`; the popup charts the active tab's course, with pills when a result set spans several. Layout maths sits in `src/shared/scatterGeometry.ts`: dot size reflects how many reviews back each point, corners are captioned so the axes need no decoding, and labels prefer above a dot, fall back to below, and are dropped rather than printed over a neighbour or outside the plot.
-- **Toolbar badge** — the extension icon shows how many rated professors the current tab has to compare. This is the attention signal, because Chrome does not let an extension open its own popup in response to page activity (see Known constraints).
-
-- **Rating trend** — `src/background/trend.ts` compares the recent half of a professor's reviews against the older half and shows ▲ or ▼ on the badge. RMP does expose per-review dates, so this is real rather than best-effort, but it is deliberately conservative: it needs at least 12 usable reviews, looks at the 20 most recent, and requires a half-point gap before calling a direction. "Steady" gets no arrow, since most professors are steady and an arrow on every badge would be noise. The reviews are re-sorted by date rather than trusting RMP's ordering, so a change in their default order cannot silently invert every arrow.
-
-- **Favorites** — the popover carries a save toggle, and the popup lists shortlisted professors joined to their cached ratings. Saving in one place updates open Class Search tabs through `chrome.storage.onChanged`. Adding this required making the popover interactive rather than a pure hover tooltip: it now stays open while the pointer is inside it, with a short close delay so moving from badge to panel does not dismiss it.
-
-- **Motion** — the tab underline travels between tabs instead of three underlines blinking on and off, panels enter from the side the tab sits on so the movement agrees with the direction the underline just went, and lists and calendar blocks stagger in rather than arriving at once. The header and tabs are held at the top by `position: sticky`, gaining a soft shadow once the content starts moving under them, and the scrollbar is a rounded pill in the same neutral palette. An inner scroll container was tried first and fought the document's own scrollbar: sizing it needed the height of everything above it as a magic number, and being a few pixels out left two scrollbars on top of each other. All of it is decoration, so `prefers-reduced-motion` removes it rather than slowing it down.
-
-- **Theme** — light / dark / auto, chosen in Settings, over one neutral palette shared between `src/content/theme.ts` and the Tailwind config. Auto follows `prefers-color-scheme` and tracks it live. The popup and the on-page popover honour the choice; badges stay light whatever the setting, since they sit inside ASU's page, which is always light, and a dark chip in a white results table would read as broken rather than as dark mode.
-
-## Phase 3 (shipped)
-
-- **Schedule builder** — every result row gets a **+ Plan** control beside its class number, and the popup's **Schedule** tab draws the week those choices make. It says *Plan* rather than *Add* because ASU's own maroon **Add** button on the same row enrols you in the class; a second control saying Add would read as the same act.
-
-- **The class number is the identity.** Sections are keyed on ASU's class number, which is the only thing separating two sections of the same course taught by the same professor — the exact case a schedule has to get right. A class number is only unique within a term, so the stored key is term plus class number, and sections from different terms never compare. `src/content/domScanner.ts` reads it from the number cell's own `id` rather than its text, since that text also carries the "Syllabus" link.
-
-- **Overlaps are named before they happen.** A row whose meeting time clashes with something already planned turns amber and says what it clashes with, so the warning arrives while you are still choosing rather than after. `src/shared/schedule.ts` compares day and time, and also the session date range: ASU's A and B sessions each run half a term, so a 9am Monday class in the first half genuinely does not clash with a 9am Monday class in the second. Classes that merely touch — one ending exactly when the next begins — do not count, and a clash on both Monday and Wednesday is reported as two problems rather than one.
-
-- **The week grid** — `src/shared/scheduleLayout.ts` places blocks by minute and packs overlapping ones into side-by-side lanes, so a clash reads as two narrow blocks rather than one hiding the other. Days between the first and last used are drawn even when empty, because a free Wednesday between Tuesday and Thursday classes is worth seeing; days outside that span are not, since an empty Friday column at the edge only makes every block narrower. Asynchronous sections leave no mark on a calendar, so they are listed below it with a note saying how many are missing from the grid rather than being silently dropped.
-
-- **What a row actually said** — days, times, location, session dates, units and open seats are parsed from the rendered row, with ASU's screen-reader labels stripped first. Anything unreadable is stored as null rather than guessed at, and a variable-unit section keeps its range so the unit total can show `13–15` instead of a number that is only half true.
-
-- **A fix this uncovered.** Reading the instructor cell's raw text turned ASU's real `<span class="sr-only">Instructor: </span>Staff` markup into a professor named "Instructor: Staff" — badged, and given a RateMyProfessor lookup of its own. The old fixture omitted the label, so the bug was invisible in tests while being live on every Staff row. Placeholder instructors are now matched against the visible text, and "Select instructor during enrollment" was added to the list.
-
-Only aggregate numbers are stored. No review text, reviewer data, or browsing activity is collected or transmitted.
-
-## Verification
-
-| Command | What it proves |
-| --- | --- |
-| `npm test` | 292 unit tests across the scanner, matcher, RMP parser, cache, badge renderer, schedule conflicts, and week layout. |
-| `npm run typecheck` | Strict TypeScript across all entry points. |
-| `npm run validate:chrome` | Loads the built extension in a disposable headless Chrome profile: the service worker starts, the popup renders without errors, a live RMP lookup succeeds, and a repeat lookup in ASU's `"Last, First"` format is served from cache without a second fetch, the settings controls render, and a saved favorite is listed with the rating joined from cache, the Settings tab renders its controls, the theme override beats the OS setting, and the Overview chart plots every seeded professor. Set `VERDCT_SCREENSHOT=<path>` to capture the popup for design review. |
-| `npm run validate:asu` | Drives the live ASU Class Search and asserts every result row receives a badge that resolves out of its loading state, including a dynamically inserted row. |
-| `npm run validate:schedule` | Drives the schedule builder end to end on the live page: every row gets a Plan control, a stored section makes exactly the rows it overlaps warn by name, clicking Plan stores what the row showed, clicking again removes it, and the popup draws the week and reports the clash. Set `VERDCT_SCREENSHOT=<path>` to capture the popup and the results page for design review. |
-| `npm run package` | Builds and zips the extension into `verdct-<version>.zip` for a GitHub Release. Set `VERDCT_EXTENSION_DIR` on `validate:chrome` to verify the unpacked archive itself loads. |
-| `npm run promo` | Captures every Chrome Web Store listing asset into `promo-out/`: four 1280x800 screenshots, plus the 440x280 and 1400x560 promo tiles as alpha-free JPEG. Screenshots mount the real badge renderer and popup, so the listing shows shipping UI. Needs `npx vite --config vite.config.promo.ts` running. |
-| `npm run preview:badges` | Opens a design harness at `localhost:5199` rendering the real badge module against mock ASU rows in every state — rated, provisional, unmatched, loading, failed. Use it to iterate on badge styling without a live search. |
-| `npm run inspect:rmp` | Reproduces the first-party GraphQL request inspection used to maintain the RMP client when its undocumented schema changes. |
-
-Set `CHROME_PATH` when Chrome is installed outside its default Windows location. `validate:asu` defaults to Fall 2026 MAT 243; set `ASU_TEST_URL` to target a different current result page.
-
-Latest `validate:asu` run: 17 of 17 rows badged in **4.3s cold-cache** (was 15.8s), 0 unresolved, 7 trend arrows, 1 best section highlighted, 0 page errors. Latest `validate:schedule` run: 17 of 17 rows given a Plan control, 1 of 17 warning about the seeded overlap, and the popup drawing both sections with the clash marked on both days it falls on. `validate:asu` reports `secondsToAllBadges`, so a performance regression shows up as a number rather than a feeling.
-
-## Known constraints
-
-- **Both upstreams are undocumented and unstable.** ASU's selectors live only in `domScanner.ts`; RMP's query and response parsing live only in `rmpClient.ts`. Either can be repaired without touching the rest of the codebase.
-- **The popup cannot open itself when you run a search.** `chrome.action.openPopup()` requires a user gesture, and per Chrome's own guidance a message from a content script does not carry one, so page activity cannot open the popup. The toolbar badge count is the supported substitute: it needs no gesture and marks the icon when a comparison is ready.
-- **A trend costs a second request.** Individual reviews are not in the search response, so a confident match with at least 12 reviews triggers one extra throttled query. Thinly-rated professors and no-match names still cost a single request, and the result is cached with the rating.
-- **ASU's school ID on RMP is hardcoded** (`ASU_RMP_SCHOOL_ID`) rather than re-searched per lookup.
-- **Instructors not on RateMyProfessor render gray.** In the reference MAT 243 run, 3 of 17 rows had no confident match. This is deliberate: a low-confidence guess is worse than no answer.
-
-## Not yet built
-
-Sentiment tags, seat alerts, and an alternate-section recommender.
+`npm run typecheck` checks types. `npm run validate:chrome`, `validate:asu`, and `validate:schedule` test the extension in a real Chrome.
 
 ## Privacy
 
-Verdct has no server, no analytics, and no account. The only outbound request is a professor-name lookup to RateMyProfessor, sent without cookies; everything else is stored locally in your browser. See [PRIVACY.md](PRIVACY.md) for the full accounting, including what is stored and how to clear it.
+No server, no tracking, no account. The only request it sends is a professor name to RateMyProfessor. Everything else stays in your browser. See [PRIVACY.md](PRIVACY.md).
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE)
