@@ -249,6 +249,15 @@ export function scheduleTotals(sections: ScheduledSection[]): ScheduleTotals {
   return { sections: sections.length, units, unitsMax, asynchronous };
 }
 
+/**
+ * The class numbers to paste into registration, in the order they are shown.
+ * Registration asks for class numbers, not course ids, and typing five of them
+ * out of a popup by hand is how a digit gets transposed.
+ */
+export function classNumberList(sections: ScheduledSection[]): string {
+  return [...new Set(sections.map((section) => section.classNumber))].join(', ');
+}
+
 const SEASONS: Record<string, string> = { '1': 'Spring', '4': 'Summer', '7': 'Fall' };
 
 /**

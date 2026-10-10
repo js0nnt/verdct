@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { SCHEDULE_LIMIT, SCHEDULE_STORAGE_KEY } from './constants';
 import {
+  classNumberList,
   clearSchedule,
   conflictsWith,
   datesOverlap,
@@ -222,6 +223,26 @@ describe('scheduleTotals', () => {
         section({ classNumber: '3', units: 1, unitsMax: 3 }),
       ]),
     ).toEqual({ sections: 3, units: 8, unitsMax: 10, asynchronous: 1 });
+  });
+});
+
+describe('classNumberList', () => {
+  it('lists class numbers in the order they are shown, ready to paste', () => {
+    expect(
+      classNumberList([
+        section({ classNumber: '70231' }),
+        section({ classNumber: '10412' }),
+        section({ classNumber: '81120' }),
+      ]),
+    ).toBe('70231, 10412, 81120');
+  });
+
+  it('lists a number once even if it somehow appears twice', () => {
+    expect(classNumberList([section(), section()])).toBe('60678');
+  });
+
+  it('is empty for an empty schedule', () => {
+    expect(classNumberList([])).toBe('');
   });
 });
 
