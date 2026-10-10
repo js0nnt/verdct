@@ -88,6 +88,34 @@ describe('the add-to-schedule control', () => {
     expect(button.getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('marks a recitation planned with its lecture as paired, and says with what', () => {
+    const lectureRow = makeRow();
+    const recitationRow = makeRow();
+    upsertScheduleControl(lectureRow, details({ classNumber: '60104', courseId: 'CHM 113' }), TERM);
+    upsertScheduleControl(
+      recitationRow,
+      details({ classNumber: '60106', courseId: 'CHM 113', meetings: [] }),
+      TERM,
+    );
+    configureSchedule([
+      scheduled({ classNumber: '60104', courseId: 'CHM 113', component: 'Lecture' }),
+      scheduled({
+        classNumber: '60106',
+        courseId: 'CHM 113',
+        component: 'Recitation',
+        pairedWith: '60104',
+        meetings: [],
+      }),
+    ]);
+
+    expect(buttonIn(recitationRow).textContent).toBe('✓Paired');
+    expect(buttonIn(recitationRow).getAttribute('aria-label')).toContain('paired with its lecture');
+    expect(buttonIn(lectureRow).textContent).toBe('✓Planned');
+    expect(buttonIn(lectureRow).getAttribute('aria-label')).toContain(
+      'Planned with recitation 60106, which comes off with it.',
+    );
+  });
+
   it('leaves a different section of the same course unmarked', () => {
     const row = makeRow();
     upsertScheduleControl(row, details({ classNumber: '99999' }), TERM);

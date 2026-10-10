@@ -24,6 +24,7 @@ import { evaluateBestSections, recordSection } from './bestSection';
 import { scanRows, type ScannedClassSection } from './domScanner';
 import { recordCoursePoint, scheduleCourseReport } from './courseReporter';
 import { configureSchedule, upsertScheduleControl } from './scheduleControl';
+import { configurePickerTheme } from './pairPicker';
 import { configureTooltipTheme } from './tooltip';
 
 const RESCAN_DELAY_MS = 100;
@@ -164,6 +165,7 @@ void readSettings().then((settings) => {
   configureBadges(settings);
   configureTheme(settings.theme);
   configureTooltipTheme(settings.theme);
+  configurePickerTheme(settings.theme);
 });
 void readFavorites().then((favorites) => {
   configureFavorites(new Set(favorites.map((favorite) => favorite.normalizedName)));
@@ -179,6 +181,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     configureBadges(settings);
     configureTheme(settings.theme);
     configureTooltipTheme(settings.theme);
+    configurePickerTheme(settings.theme);
   }
 
   // Removing a section in the popup has to clear the row's "Added" state, and

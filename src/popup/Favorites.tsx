@@ -4,6 +4,7 @@ import { readCachedRating } from '../background/cache';
 import { readFavorites, removeFavorite } from '../shared/favorites';
 import type { FavoriteProfessor, ProfessorRating } from '../shared/types';
 import { useLeaving } from './motion';
+import { ProfessorName } from './ProfessorName';
 import { RemoveButton } from './RemoveButton';
 import { SectionLabel } from './SectionLabel';
 import { ToneBadge, toneFor } from './ToneBadge';
@@ -80,7 +81,9 @@ export function Favorites() {
                     }
                     value={row.rating?.overallRating ?? null}
                   />
-                  <span className="truncate text-[12.5px] font-medium">{row.displayName}</span>
+                  <span className="min-w-0 text-[12.5px] font-medium">
+                    <ProfessorName name={row.displayName} legacyId={row.rating?.legacyId ?? null} />
+                  </span>
                   <RemoveButton
                     label={`Remove ${row.displayName} from favorites`}
                     onClick={() => handleRemove(row.normalizedName)}

@@ -4,13 +4,16 @@ import { SCHEDULE_LIMIT, SCHEDULE_STORAGE_KEY } from './constants';
 import {
   classNumberList,
   clearSchedule,
+  companionsOf,
   conflictsWith,
   datesOverlap,
   findConflicts,
   formatClockTime,
+  groupSections,
   parseClockTime,
   parseDayTokens,
   parseSchedule,
+  planSectionGroup,
   readSchedule,
   removeScheduledSection,
   scheduleTotals,
@@ -57,6 +60,8 @@ function section(overrides: Partial<ScheduledSection> = {}): ScheduledSection {
     unitsMax: null,
     seatsOpen: 8,
     seatsTotal: 60,
+    component: null,
+    pairedWith: null,
     addedAt: 1,
     ...overrides,
   };
@@ -414,5 +419,121 @@ describe('a clash on more than one day', () => {
     ]);
 
     expect(conflicts.map((conflict) => conflict.day)).toEqual(['Mon', 'Wed']);
+  });
+});
+
+describe('a lecture planned with its recitation and lab', () => {
+  const lecture = section({ classNumber: '60104', courseId: 'CHM 113', component: 'Lecture' });
+  const recitation = section({
+    classNumber: '60106',
+    courseId: 'CHM 113',
+    component: 'Recitation',
+    meetings: [meeting('T', 8 * 60, 8 * 60 + 50)],
+  });
+  const lab = section({
+    classNumber: '60100',
+    courseId: 'CHM 113',
+    component: 'Laboratory',
+    meetings: [meeting('Th', 10 * 60, 11 * 60 + 50)],
+  });
+  const strip = ({ addedAt: _addedAt, pairedWith: _pairedWith, ...rest }: ScheduledSection) => rest;
+
+  it('is saved in one write, with each companion pointing at its lecture', async () => {
+    const area = fakeArea();
+    await planSectionGroup(strip(lecture), [strip(recitation), strip(lab)], area, () => 5);
+
+    const stored = await readSchedule(area);
+    expect(stored.map((entry) => [entry.classNumber, entry.pairedWith, entry.component])).toEqual([
+      ['60104', null, 'Lecture'],
+      ['60106', '60104', 'Recitation'],
+      ['60100', '60104', 'Laboratory'],
+    ]);
+    expect(companionsOf(stored, '2267', '60104').map((entry) => entry.classNumber)).toEqual([
+      '60106',
+      '60100',
+    ]);
+  });
+
+  it('swaps a recitation when the lecture is planned again with a different one', async () => {
+    const area = fakeArea();
+    await planSectionGroup(strip(lecture), [strip(recitation), strip(lab)], area);
+    const other = { ...strip(recitation), classNumber: '60107' };
+    await planSectionGroup(strip(lecture), [other, strip(lab)], area);
+
+    const stored = await readSchedule(area);
+    expect(stored.map((entry) => entry.classNumber).sort()).toEqual(['60100', '60104', '60107']);
+  });
+
+  it('comes off the schedule as a whole when the lecture is removed', async () => {
+    const area = fakeArea();
+    await planSectionGroup(strip(lecture), [strip(recitation)], area);
+    await toggleScheduledSection({ ...strip(section()), pairedWith: null }, area);
+    await removeScheduledSection('2267', '60104', area);
+
+    expect((await readSchedule(area)).map((entry) => entry.classNumber)).toEqual(['60678']);
+  });
+
+  it('comes off as a whole when the lecture is toggled off from the page', async () => {
+    const area = fakeArea();
+    await planSectionGroup(strip(lecture), [strip(recitation)], area);
+    expect(await toggleScheduledSection({ ...strip(lecture), pairedWith: null }, area)).toBe(false);
+
+    expect(await readSchedule(area)).toEqual([]);
+  });
+
+  it('leaves a same-numbered section in another term alone', async () => {
+    const area = fakeArea();
+    await planSectionGroup(strip(lecture), [strip(recitation)], area);
+    await planSectionGroup({ ...strip(lecture), term: '2271' }, [], area);
+    await removeScheduledSection('2271', '60104', area);
+
+    expect((await readSchedule(area)).map((entry) => entry.classNumber)).toEqual(['60104', '60106']);
+  });
+
+  it('refuses a group that would not fit, rather than saving half of it', async () => {
+    const full = Array.from({ length: SCHEDULE_LIMIT - 1 }, (_, index) =>
+      section({ classNumber: String(10_000 + index) }),
+    );
+    const area = fakeArea({ [SCHEDULE_STORAGE_KEY]: full });
+
+    await expect(
+      planSectionGroup(strip(lecture), [strip(recitation)], area),
+    ).rejects.toThrow('The schedule is full.');
+    expect(await readSchedule(area)).toHaveLength(SCHEDULE_LIMIT - 1);
+  });
+
+  it('survives a round trip through storage', () => {
+    const [entry] = parseSchedule([{ ...recitation, pairedWith: '60104' }]);
+    expect(entry.pairedWith).toBe('60104');
+    expect(entry.component).toBe('Recitation');
+  });
+
+  it('reads a section saved before pairing existed as unpaired', () => {
+    const { component: _component, pairedWith: _pairedWith, ...legacy } = section();
+    const [entry] = parseSchedule([legacy]);
+    expect(entry.component).toBeNull();
+    expect(entry.pairedWith).toBeNull();
+  });
+});
+
+describe('groupSections', () => {
+  it('lists each lecture with what was planned alongside it', () => {
+    const groups = groupSections([
+      section({ classNumber: '60104' }),
+      section({ classNumber: '11111' }),
+      section({ classNumber: '60106', pairedWith: '60104', component: 'Recitation' }),
+    ]);
+
+    expect(
+      groups.map((group) => [group.primary.classNumber, group.companions.map((c) => c.classNumber)]),
+    ).toEqual([
+      ['60104', ['60106']],
+      ['11111', []],
+    ]);
+  });
+
+  it('still lists a recitation whose lecture is missing', () => {
+    const groups = groupSections([section({ classNumber: '60106', pairedWith: '60104' })]);
+    expect(groups.map((group) => group.primary.classNumber)).toEqual(['60106']);
   });
 });

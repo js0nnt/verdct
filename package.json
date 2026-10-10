@@ -14,6 +14,7 @@
     "validate:chrome": "node scripts/validate-chrome.mjs",
     "validate:asu": "node scripts/validate-asu.mjs",
     "validate:schedule": "node scripts/validate-schedule.mjs",
+    "validate:pairing": "node scripts/validate-pairing.mjs",
     "inspect:rmp": "node scripts/inspect-rmp.mjs"
   },
   "dependencies": {

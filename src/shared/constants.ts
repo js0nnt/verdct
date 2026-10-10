@@ -30,6 +30,13 @@ export const RMP_GRAPHQL_ENDPOINT = 'https://www.ratemyprofessors.com/graphql';
 export function professorUrl(legacyId: number): string {
   return `https://www.ratemyprofessors.com/professor/${legacyId}`;
 }
+/**
+ * ASU's own class search API, the one Class Search itself reads. Verdct asks it
+ * only which recitations and labs a lecture is paired with, which the results
+ * page does not print.
+ */
+export const ASU_CATALOG_API =
+  'https://eadvs-cscc-catalog-api.apps.asu.edu/catalog-microservices/api/v1/search/classes';
 export const ASU_RMP_SCHOOL_ID = 'U2Nob29sLTE1NzIz';
 /**
  * Spacing between the *starts* of RMP requests. Combined with the concurrency
@@ -77,8 +84,10 @@ export const VERDCT_BEST_CHIP_ATTRIBUTE = 'data-verdct-best-chip';
 export const VERDCT_TOOLTIP_ATTRIBUTE = 'data-verdct-tooltip';
 /** The add-to-schedule control injected into each row's class-number cell. */
 export const VERDCT_SCHEDULE_ATTRIBUTE = 'data-verdct-schedule';
+/** The floating panel for choosing a lecture's recitation and lab. */
+export const VERDCT_PICKER_ATTRIBUTE = 'data-verdct-picker';
 
 export const VERDCT_INJECTED_SELECTOR =
   `[${VERDCT_BADGE_ATTRIBUTE}], [${VERDCT_POPOVER_ATTRIBUTE}], ` +
   `[${VERDCT_BEST_CHIP_ATTRIBUTE}], [${VERDCT_TOOLTIP_ATTRIBUTE}], ` +
-  `[${VERDCT_SCHEDULE_ATTRIBUTE}]`;
+  `[${VERDCT_SCHEDULE_ATTRIBUTE}], [${VERDCT_PICKER_ATTRIBUTE}]`;

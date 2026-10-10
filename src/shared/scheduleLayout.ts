@@ -4,6 +4,11 @@ import { WEEKDAYS, type ScheduledSection, type Weekday } from './schedule';
 export interface WeekBlock {
   classNumber: string;
   courseId: string;
+  /**
+   * Set for a recitation or lab planned with a lecture, so its block can say
+   * so; two blocks both reading "CHM 113" would not say which is which.
+   */
+  component: string | null;
   day: Weekday;
   startMinutes: number;
   endMinutes: number;
@@ -104,6 +109,7 @@ export function layoutWeek(sections: ScheduledSection[]): WeekLayout {
         blocks.push({
           classNumber: section.classNumber,
           courseId: section.courseId,
+          component: section.pairedWith ? section.component : null,
           day,
           startMinutes: meeting.startMinutes,
           endMinutes: meeting.endMinutes,

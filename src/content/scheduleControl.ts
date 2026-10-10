@@ -1,12 +1,24 @@
 import { VERDCT_SCHEDULE_ATTRIBUTE } from '../shared/constants';
 import {
+  companionsOf,
   conflictsWith,
   formatClockTime,
+  planSectionGroup,
+  readSchedule,
   sectionKey,
   toggleScheduledSection,
   type ScheduledSection,
 } from '../shared/schedule';
+import {
+  lookupRelated,
+  lookupSection,
+  pairsWith,
+  requiredChoices,
+  toScheduledFromCatalog,
+  type CatalogSection,
+} from './asuCatalog';
 import { ASU_CLASS_SEARCH_SELECTORS, type ScannedSectionDetails } from './domScanner';
+import { closePairPicker, componentNoun, openPairPicker } from './pairPicker';
 import { EMBEDDED_TOKENS } from './theme';
 import { hideTooltip, showTooltip } from './tooltip';
 
@@ -62,6 +74,12 @@ const CONTROL_STYLES = `
   }
   button.clash:not(.scheduled) { background: rgba(196, 127, 16, 0.08); }
 
+  /* Waiting on ASU's catalog to say what this section pairs with. */
+  button.busy { cursor: progress; }
+  button.busy .mark { animation: pulse 900ms ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.25; } }
+  @media (prefers-reduced-motion: reduce) { button.busy .mark { animation: none; } }
+
   .mark { font-size: 11px; line-height: 12px; }
 `;
 
@@ -70,6 +88,7 @@ interface ControlHandle {
   button: HTMLButtonElement;
   details: ScannedSectionDetails;
   term: string;
+  busy: boolean;
 }
 
 const controls = new Map<HTMLElement, ControlHandle>();
@@ -106,12 +125,22 @@ export function toScheduledSection(
     unitsMax: details.unitsMax,
     seatsOpen: details.seatsOpen,
     seatsTotal: details.seatsTotal,
+    component: null,
+    pairedWith: null,
   };
 }
 
-function isScheduled(term: string, classNumber: string): boolean {
+function storedEntry(term: string, classNumber: string): ScheduledSection | undefined {
   const key = sectionKey(term, classNumber);
-  return scheduled.some((entry) => sectionKey(entry.term, entry.classNumber) === key);
+  return scheduled.find((entry) => sectionKey(entry.term, entry.classNumber) === key);
+}
+
+function isScheduled(term: string, classNumber: string): boolean {
+  return storedEntry(term, classNumber) !== undefined;
+}
+
+function nameOf(section: Pick<ScheduledSection, 'courseId' | 'classNumber'>): string {
+  return `${section.courseId} (${section.classNumber})`;
 }
 
 /**
@@ -132,40 +161,72 @@ function clashSentence(conflicting: ScheduledSection[]): string {
 
 function explain(handle: ControlHandle): { title: string; body: string } {
   const { details, term } = handle;
-  const inSchedule = isScheduled(term, details.classNumber);
+  const stored = storedEntry(term, details.classNumber);
   const conflicting = clashes(details, term);
 
   const body =
     `${details.courseId} section ${details.classNumber}. ${describeMeetings(details)}.` +
     (conflicting.length > 0 ? clashSentence(conflicting) : '');
 
+  if (stored?.pairedWith) {
+    const lecture = storedEntry(term, stored.pairedWith);
+    return {
+      title: `Paired with ${lecture ? nameOf(lecture) : `section ${stored.pairedWith}`}`,
+      body:
+        `${body} It comes off your schedule with its lecture. To swap it, press ` +
+        `+ Plan on another ${componentNoun(stored.component ?? 'section')}.`,
+    };
+  }
+
+  const companions = stored ? companionsOf(scheduled, term, details.classNumber) : [];
+  const pairing =
+    companions.length > 0
+      ? ` Planned with ${companions
+          .map(
+            (companion) =>
+              `${componentNoun(companion.component ?? 'section')} ${companion.classNumber}`,
+          )
+          .join(' and ')}, which come${companions.length > 1 ? '' : 's'} off with it.`
+      : '';
+
   return {
-    title: inSchedule ? 'In your schedule' : 'Add to your schedule',
-    body,
+    title: stored ? 'In your schedule' : 'Add to your schedule',
+    body: body + pairing,
   };
 }
 
 function paint(handle: ControlHandle): void {
   const { button, details, term } = handle;
-  const inSchedule = isScheduled(term, details.classNumber);
+  const stored = storedEntry(term, details.classNumber);
   const conflicting = clashes(details, term);
 
-  button.className = [inSchedule ? 'scheduled' : '', conflicting.length > 0 ? 'clash' : '']
+  button.className = [
+    stored ? 'scheduled' : '',
+    conflicting.length > 0 ? 'clash' : '',
+    handle.busy ? 'busy' : '',
+  ]
     .filter(Boolean)
     .join(' ');
 
   button.replaceChildren();
-  button.append(markElement(inSchedule ? '✓' : '+'));
+  button.append(markElement(handle.busy ? '…' : stored ? '✓' : '+'));
   // "Plan", not "Add": ASU's own maroon Add button on the same row enrols you in
   // the class, and a second control saying Add would read as the same act.
-  button.append(document.createTextNode(inSchedule ? 'Planned' : 'Plan'));
+  button.append(
+    document.createTextNode(stored ? (stored.pairedWith ? 'Paired' : 'Planned') : 'Plan'),
+  );
+  button.setAttribute('aria-busy', String(handle.busy));
+  const inSchedule = stored !== undefined;
 
   button.setAttribute('aria-pressed', String(inSchedule));
   const { body } = explain(handle);
   button.setAttribute(
     'aria-label',
-    `${inSchedule ? 'Remove' : 'Add'} ${details.courseId} section ${details.classNumber} ` +
-      `${inSchedule ? 'from' : 'to'} your Verdct schedule. ${body}`,
+    stored?.pairedWith
+      ? `${details.courseId} section ${details.classNumber} is paired with its lecture in ` +
+          `your Verdct schedule. ${body}`
+      : `${inSchedule ? 'Remove' : 'Add'} ${details.courseId} section ${details.classNumber} ` +
+          `${inSchedule ? 'from' : 'to'} your Verdct schedule. ${body}`,
   );
 }
 
@@ -177,17 +238,161 @@ function markElement(text: string): HTMLElement {
 }
 
 /**
- * Mirrors the write into the local copy of the schedule so the clicked button,
- * and every other row's clash warning, is correct on the same tick.
+ * Re-reads the schedule and repaints every row. The storage listener would get
+ * there too, but the clicked button should not wait on that round trip.
  */
-function applyLocally(handle: ControlHandle, nowScheduled: boolean): void {
-  const key = sectionKey(handle.term, handle.details.classNumber);
-  const without = scheduled.filter(
-    (entry) => sectionKey(entry.term, entry.classNumber) !== key,
+async function refreshFromStorage(): Promise<void> {
+  configureSchedule(await readSchedule());
+}
+
+function setBusy(handle: ControlHandle, busy: boolean): void {
+  handle.busy = busy;
+  paint(handle);
+}
+
+/** What a candidate recitation or lab would overlap, phrased for the picker. */
+function clashNames(section: CatalogSection, lecture: CatalogSection): string[] {
+  const candidate = { ...toScheduledFromCatalog(section), pairedWith: null, addedAt: 0 };
+  const lectureEntry = { ...toScheduledFromCatalog(lecture), pairedWith: null, addedAt: 0 };
+  // The lecture being planned counts: a recitation at the same hour as its own
+  // lecture clashes like any other. What the lecture is already paired with
+  // does not, since choosing again replaces it.
+  const others = scheduled.filter(
+    (entry) =>
+      entry.term !== lecture.term ||
+      (entry.classNumber !== lecture.classNumber && entry.pairedWith !== lecture.classNumber),
   );
-  scheduled = nowScheduled
-    ? [...without, { ...toScheduledSection(handle.details, handle.term), addedAt: Date.now() }]
-    : without;
+  return conflictsWith(candidate, [...others, lectureEntry]).map(nameOf);
+}
+
+/** Plans a lecture, asking for its recitation and lab first when it has any. */
+async function planLecture(handle: ControlHandle, lecture: CatalogSection): Promise<void> {
+  const choices = requiredChoices(lecture, await lookupRelated(lecture));
+  if (choices.length === 0) {
+    await planSectionGroup(toScheduledFromCatalog(lecture), []);
+    await refreshFromStorage();
+    const { title, body } = explain(handle);
+    showTooltip(handle.button, title, body);
+    return;
+  }
+
+  openPairPicker({
+    anchor: handle.button,
+    lecture,
+    choices,
+    clashesFor: (section) => clashNames(section, lecture),
+    onConfirm: async (chosen) => {
+      await planSectionGroup(toScheduledFromCatalog(lecture), chosen.map(toScheduledFromCatalog));
+      await refreshFromStorage();
+      const { title, body } = explain(handle);
+      showTooltip(handle.button, title, body);
+    },
+  });
+}
+
+/**
+ * A recitation or lab joins a lecture that is already planned, replacing
+ * whatever that lecture had of the same kind. On its own it cannot be planned:
+ * ASU does not enroll anyone in a recitation without its lecture.
+ */
+async function planCompanion(handle: ControlHandle, companion: CatalogSection): Promise<void> {
+  const candidates = scheduled.filter(
+    (entry) =>
+      entry.term === companion.term &&
+      entry.courseId === companion.courseId &&
+      entry.pairedWith === null,
+  );
+
+  for (const candidate of candidates) {
+    const lecture = await lookupSection(candidate.term, candidate.classNumber).catch(() => null);
+    if (!lecture || !pairsWith(lecture, companion)) continue;
+
+    const kept = companionsOf(scheduled, candidate.term, candidate.classNumber).filter(
+      (entry) => entry.component !== companion.component,
+    );
+    await planSectionGroup(candidate, [...kept, toScheduledFromCatalog(companion)]);
+    await refreshFromStorage();
+    showTooltip(
+      handle.button,
+      `Paired with ${nameOf(candidate)}`,
+      `This is now the ${componentNoun(companion.component)} planned with that lecture.`,
+    );
+    return;
+  }
+
+  const noun = componentNoun(companion.component);
+  if (candidates.length > 0) {
+    // A lecture of this course is planned, just not one this section goes with,
+    // as with a Downtown recitation against a Tempe lecture.
+    showTooltip(
+      handle.button,
+      'Goes with a different lecture',
+      `This ${noun} (${companion.classNumber}) belongs to a different ${companion.courseId} ` +
+        `lecture than the one you planned. Pick a ${noun} that goes with ` +
+        `${candidates.map(nameOf).join(' or ')} instead, or plan the lecture this one belongs to.`,
+    );
+    return;
+  }
+  showTooltip(
+    handle.button,
+    'Plan the lecture first',
+    `ASU enrolls you in a ${noun} together with its lecture, never on its own. Press + Plan ` +
+      `on a ${companion.courseId} lecture and choose this ${noun} (${companion.classNumber}) there.`,
+  );
+}
+
+async function activate(handle: ControlHandle): Promise<void> {
+  const { details, term, button } = handle;
+  const stored = storedEntry(term, details.classNumber);
+
+  if (stored?.pairedWith) {
+    const { title, body } = explain(handle);
+    showTooltip(button, title, body);
+    return;
+  }
+
+  if (stored) {
+    // Removing a lecture takes its recitation and lab with it.
+    closePairPicker();
+    await toggleScheduledSection(toScheduledSection(details, term));
+    await refreshFromStorage();
+    const { title, body } = explain(handle);
+    showTooltip(button, title, body);
+    return;
+  }
+
+  setBusy(handle, true);
+  try {
+    const section = await lookupSection(term, details.classNumber).catch((error: unknown) => {
+      console.warn("[Verdct] Could not read ASU's catalog; planning the section alone", error);
+      return null;
+    });
+
+    if (!section) {
+      // Without the catalog there is no knowing what this section pairs with,
+      // and refusing to plan it at all would be worse than planning it alone,
+      // the way Verdct always has.
+      await toggleScheduledSection(toScheduledSection(details, term));
+      await refreshFromStorage();
+      const { title, body } = explain(handle);
+      showTooltip(button, title, body);
+    } else if (section.enrollment) {
+      await planLecture(handle, section);
+    } else {
+      await planCompanion(handle, section);
+    }
+  } catch (error) {
+    console.warn('[Verdct] Could not plan the section', error);
+    showTooltip(
+      button,
+      'Not planned',
+      error instanceof Error && error.message === 'The schedule is full.'
+        ? 'Your schedule is full. Remove something from it first.'
+        : "Couldn't reach ASU's catalog to find what this section pairs with. Try again.",
+    );
+  } finally {
+    setBusy(handle, false);
+  }
 }
 
 function createControl(
@@ -211,23 +416,16 @@ function createControl(
   shadow.append(style, button);
   cell.append(host);
 
-  const handle: ControlHandle = { host, button, details, term };
+  const handle: ControlHandle = { host, button, details, term, busy: false };
 
   button.addEventListener('click', (event) => {
     // ASU's row opens a details accordion on click; adding a section should not
     // also expand the row underneath the button.
     event.preventDefault();
     event.stopPropagation();
-    void toggleScheduledSection(toScheduledSection(handle.details, handle.term)).then(
-      (nowScheduled) => {
-        // The storage listener repaints every row, this one included, but the
-        // clicked button should not wait on that round trip to answer.
-        applyLocally(handle, nowScheduled);
-        paint(handle);
-        const { title, body } = explain(handle);
-        showTooltip(button, title, body);
-      },
-    );
+    if (handle.busy) return;
+    hideTooltip();
+    void activate(handle);
   });
   button.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
@@ -235,6 +433,13 @@ function createControl(
   button.addEventListener('mouseenter', () => {
     const { title, body } = explain(handle);
     showTooltip(button, title, body);
+    // Asked ahead of the click, so a lecture's recitations are usually known by
+    // the time the button is pressed. Both lookups are remembered for the page.
+    if (!isScheduled(handle.term, handle.details.classNumber)) {
+      void lookupSection(handle.term, handle.details.classNumber)
+        .then((section) => (section?.enrollment ? lookupRelated(section) : null))
+        .catch(() => undefined);
+    }
   });
   button.addEventListener('focus', () => {
     const { title, body } = explain(handle);

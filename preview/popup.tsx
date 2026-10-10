@@ -100,6 +100,8 @@ function section(
     unitsMax: null,
     seatsOpen: 12,
     seatsTotal: 150,
+    component: null,
+    pairedWith: null,
     addedAt: Date.now(),
   };
 }

@@ -21,6 +21,8 @@ function section(classNumber: string, meetings: Meeting[]): ScheduledSection {
     unitsMax: null,
     seatsOpen: null,
     seatsTotal: null,
+    component: null,
+    pairedWith: null,
     addedAt: 1,
   };
 }

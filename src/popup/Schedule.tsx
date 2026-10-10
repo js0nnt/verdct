@@ -7,6 +7,7 @@ import {
   clearSchedule,
   findConflicts,
   formatClockTime,
+  groupSections,
   removeScheduledSection,
   readSchedule,
   scheduleTotals,
@@ -15,14 +16,18 @@ import {
 } from '../shared/schedule';
 import type { ReportStatus } from './App';
 import { useCopy, useLeaving } from './motion';
+import { ProfessorName } from './ProfessorName';
 import { RemoveButton } from './RemoveButton';
 import { SectionLabel } from './SectionLabel';
 import { Segmented } from './Segmented';
 import { ToneBadge, toneFor } from './ToneBadge';
 import { WeekGrid } from './WeekGrid';
 
-/** Ratings joined to the schedule, keyed by the normalized instructor name. */
-type RatingsByName = Map<string, number | null>;
+/**
+ * Ratings joined to the schedule, keyed by the normalized instructor name.
+ * The RateMyProfessor id rides along so a name can link to its page.
+ */
+type RatingsByName = Map<string, { rating: number | null; legacyId: number | null }>;
 
 /** How long "Clear all" waits for its confirming second press. */
 const CLEAR_CONFIRM_MS = 3_000;
@@ -73,6 +78,34 @@ function CheckIcon() {
   );
 }
 
+/** A class number that copies itself, since registration asks for it one at a time. */
+function NumberChip({
+  classNumber,
+  copied,
+  onCopy,
+}: {
+  classNumber: string;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onCopy}
+      aria-label={`Copy class number ${classNumber}`}
+      title="Copy class number"
+      className={`flex h-5 items-center gap-1 rounded-full px-1.5 text-[10.5px] font-medium tabular-nums transition-colors duration-200 ${
+        copied
+          ? 'bg-tone-good/12 text-tone-good dark:bg-tonedark-good/15 dark:text-tonedark-good'
+          : 'bg-surface-sunken text-ink-muted hover:text-ink dark:bg-surface-darksunken dark:text-inkdark-muted dark:hover:text-inkdark'
+      }`}
+    >
+      {copied ? <CheckIcon /> : <span className="opacity-60">#</span>}
+      {classNumber}
+    </button>
+  );
+}
+
 export function Schedule({ onStatus }: { onStatus: ReportStatus }) {
   const [sections, setSections] = useState<ScheduledSection[] | null>(null);
   const [activeTerm, setActiveTerm] = useState<string | null>(null);
@@ -105,9 +138,13 @@ export function Schedule({ onStatus }: { onStatus: ReportStatus }) {
     );
 
     void Promise.all(
-      [...names].map(
-        async (name) => [name, (await readCachedRating(name))?.overallRating ?? null] as const,
-      ),
+      [...names].map(async (name) => {
+        const cached = await readCachedRating(name);
+        return [
+          name,
+          { rating: cached?.overallRating ?? null, legacyId: cached?.legacyId ?? null },
+        ] as const;
+      }),
     ).then((entries) => setRatings(new Map(entries)));
   }, [sections]);
 
@@ -126,10 +163,14 @@ export function Schedule({ onStatus }: { onStatus: ReportStatus }) {
   const nameOf = useCallback(
     (classNumber: string) => {
       const match = shown.find((section) => section.classNumber === classNumber);
-      return match ? `${match.courseId} (${classNumber})` : classNumber;
+      if (!match) return classNumber;
+      // A recitation shares its lecture's course id, so it says which it is.
+      const kind = match.pairedWith && match.component ? ` ${match.component.toLowerCase()}` : '';
+      return `${match.courseId}${kind} (${classNumber})`;
     },
     [shown],
   );
+  const groups = useMemo(() => groupSections(shown), [shown]);
   const conflicted = useMemo(
     () => new Set(conflicts.flatMap((conflict) => [conflict.left, conflict.right])),
     [conflicts],
@@ -282,9 +323,30 @@ export function Schedule({ onStatus }: { onStatus: ReportStatus }) {
       </div>
 
       <ul className="mt-1">
-        {shown.map((section, position) => {
+        {groups.map(({ primary: section, companions }, position) => {
           const key = `${section.term}:${section.classNumber}`;
-          const numberCopied = copied === key;
+          const chip = (target: ScheduledSection) => {
+            const chipKey = `${target.term}:${target.classNumber}`;
+            return (
+              <NumberChip
+                classNumber={target.classNumber}
+                copied={copied === chipKey}
+                onCopy={() => copy(chipKey, target.classNumber)}
+              />
+            );
+          };
+          const overlap = (target: ScheduledSection) =>
+            conflicted.has(target.classNumber) && (
+              <span className="text-[9.5px] font-semibold uppercase tracking-[0.08em] text-tone-poor dark:text-tonedark-poor">
+                Overlap
+              </span>
+            );
+          const removeLabel =
+            companions.length > 0
+              ? `Remove ${section.courseId} section ${section.classNumber} and its ` +
+                `${companions.map((companion) => (companion.component ?? 'section').toLowerCase()).join(' and ')} ` +
+                'from your schedule'
+              : `Remove ${section.courseId} section ${section.classNumber} from your schedule`;
           return (
             <li
               key={key}
@@ -296,29 +358,9 @@ export function Schedule({ onStatus }: { onStatus: ReportStatus }) {
                 <div className="group border-b border-line py-3 dark:border-line-dark">
                   <div className="flex items-center gap-2">
                     <span className="text-[13px] font-semibold tracking-tight">{section.courseId}</span>
-                    <button
-                      type="button"
-                      onClick={() => copy(key, section.classNumber)}
-                      aria-label={`Copy class number ${section.classNumber}`}
-                      title="Copy class number"
-                      className={`flex h-5 items-center gap-1 rounded-full px-1.5 text-[10.5px] font-medium tabular-nums transition-colors duration-200 ${
-                        numberCopied
-                          ? 'bg-tone-good/12 text-tone-good dark:bg-tonedark-good/15 dark:text-tonedark-good'
-                          : 'bg-surface-sunken text-ink-muted hover:text-ink dark:bg-surface-darksunken dark:text-inkdark-muted dark:hover:text-inkdark'
-                      }`}
-                    >
-                      {numberCopied ? <CheckIcon /> : <span className="opacity-60">#</span>}
-                      {section.classNumber}
-                    </button>
-                    {conflicted.has(section.classNumber) && (
-                      <span className="text-[9.5px] font-semibold uppercase tracking-[0.08em] text-tone-poor dark:text-tonedark-poor">
-                        Overlap
-                      </span>
-                    )}
-                    <RemoveButton
-                      label={`Remove ${section.courseId} section ${section.classNumber} from your schedule`}
-                      onClick={() => handleRemove(section)}
-                    />
+                    {chip(section)}
+                    {overlap(section)}
+                    <RemoveButton label={removeLabel} onClick={() => handleRemove(section)} />
                   </div>
 
                   {section.courseTitle && (
@@ -342,11 +384,62 @@ export function Schedule({ onStatus }: { onStatus: ReportStatus }) {
                   {section.instructors.length > 0 && (
                     <ul className="mt-2 space-y-1">
                       {section.instructors.map((instructor) => {
-                        const rating = ratings.get(normalizeProfessorName(instructor)) ?? null;
+                        const known = ratings.get(normalizeProfessorName(instructor));
                         return (
                           <li key={instructor} className="flex items-center gap-2 text-[11.5px]">
-                            <ToneBadge tone={toneFor(rating)} value={rating} />
-                            <span className="truncate">{instructor}</span>
+                            <ToneBadge
+                              tone={toneFor(known?.rating ?? null)}
+                              value={known?.rating ?? null}
+                            />
+                            <ProfessorName name={instructor} legacyId={known?.legacyId ?? null} />
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+
+                  {/* What the lecture was planned with. Hung off a rail rather
+                      than listed as cards of their own, since they come and go
+                      only with the lecture. */}
+                  {companions.length > 0 && (
+                    <ul className="mt-2.5 space-y-2 border-l-2 border-line pl-3 dark:border-line-dark">
+                      {companions.map((companion) => {
+                        const [instructor] = companion.instructors;
+                        const known = instructor
+                          ? ratings.get(normalizeProfessorName(instructor))
+                          : undefined;
+                        return (
+                          <li key={companion.classNumber}>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-muted dark:text-inkdark-muted">
+                                {companion.component ?? 'Section'}
+                              </span>
+                              {chip(companion)}
+                              {overlap(companion)}
+                            </div>
+                            <p className="mt-1 text-[11px] font-medium tabular-nums">
+                              {meetingLine(companion)}
+                            </p>
+                            <p className="flex min-w-0 items-center gap-1.5 text-[10.5px] text-ink-faint dark:text-inkdark-faint">
+                              {instructor && (
+                                <>
+                                  <ToneBadge
+                                    tone={toneFor(known?.rating ?? null)}
+                                    value={known?.rating ?? null}
+                                  />
+                                  <ProfessorName
+                                    name={instructor}
+                                    legacyId={known?.legacyId ?? null}
+                                  />
+                                </>
+                              )}
+                              {companion.location && (
+                                <span className="truncate">
+                                  {instructor ? '· ' : ''}
+                                  {companion.location}
+                                </span>
+                              )}
+                            </p>
                           </li>
                         );
                       })}

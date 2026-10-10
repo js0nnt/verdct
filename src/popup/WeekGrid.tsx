@@ -6,6 +6,11 @@ const HOUR_HEIGHT_PX = 34;
 const MINIMUM_BLOCK_PX = 15;
 const GUTTER_WIDTH_PX = 28;
 
+/** "Recitation" → "REC", "Laboratory" → "LAB": enough to tell blocks apart. */
+function componentTag(component: string): string {
+  return component.slice(0, 3).toUpperCase();
+}
+
 function hourLabel(minutes: number): string {
   const hour24 = Math.floor(minutes / 60) % 24;
   const suffix = hour24 < 12 ? 'a' : 'p';
@@ -86,7 +91,8 @@ export function WeekGrid({ sections }: { sections: ScheduledSection[] }) {
                     <div
                       key={`${block.classNumber}-${block.startMinutes}`}
                       title={
-                        `${block.courseId} (${block.classNumber})\n` +
+                        `${block.courseId}${block.component ? ` ${block.component}` : ''} ` +
+                        `(${block.classNumber})\n` +
                         `${day} ${formatClockTime(block.startMinutes)} – ` +
                         `${formatClockTime(block.endMinutes)}` +
                         (block.conflicted ? '\nOverlaps another section' : '')
@@ -107,6 +113,11 @@ export function WeekGrid({ sections }: { sections: ScheduledSection[] }) {
                       }}
                     >
                       {block.courseId}
+                      {block.component && (
+                        <span className="block font-medium opacity-70">
+                          {componentTag(block.component)}
+                        </span>
+                      )}
                     </div>
                   );
                 })}

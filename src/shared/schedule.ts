@@ -58,6 +58,18 @@ export interface ScheduledSection {
   unitsMax: number | null;
   seatsOpen: number | null;
   seatsTotal: number | null;
+  /**
+   * ASU's name for the kind of meeting — "Lecture", "Recitation", "Laboratory".
+   * Null for sections planned before Verdct read it, and when ASU's catalog
+   * could not be reached.
+   */
+  component: string | null;
+  /**
+   * For a recitation or lab: the class number of the lecture it was planned
+   * with. ASU will not enroll a student in one without the other, so the two
+   * are added together and removed together.
+   */
+  pairedWith: string | null;
   addedAt: number;
 }
 
@@ -368,6 +380,8 @@ export function parseSchedule(value: unknown): ScheduledSection[] {
       unitsMax: optionalNumber(entry.unitsMax),
       seatsOpen: optionalNumber(entry.seatsOpen),
       seatsTotal: optionalNumber(entry.seatsTotal),
+      component: optionalString(entry.component),
+      pairedWith: optionalString(entry.pairedWith),
       addedAt,
     });
   }
@@ -398,10 +412,7 @@ export function toggleScheduledSection(
 ): Promise<boolean> {
   return enqueueWrite(async () => {
     const current = await readSchedule(area);
-    const key = sectionKey(section.term, section.classNumber);
-    const without = current.filter(
-      (entry) => sectionKey(entry.term, entry.classNumber) !== key,
-    );
+    const without = withoutGroup(current, section.term, section.classNumber);
     const isAdding = without.length === current.length;
 
     // Oldest first, so the grid keeps a stable order as sections are added.
@@ -420,12 +431,97 @@ export function removeScheduledSection(
   area: StorageAreaLike = defaultStorageArea(),
 ): Promise<void> {
   return enqueueWrite(async () => {
-    const key = sectionKey(term, classNumber);
-    const remaining = (await readSchedule(area)).filter(
-      (entry) => sectionKey(entry.term, entry.classNumber) !== key,
-    );
+    const remaining = withoutGroup(await readSchedule(area), term, classNumber);
     await area.set({ [SCHEDULE_STORAGE_KEY]: remaining });
   });
+}
+
+/**
+ * Plans a lecture together with the recitation and lab it needs, in one write.
+ * Anything the lecture was paired with before is replaced, so picking a
+ * different recitation swaps it rather than leaving two behind.
+ */
+export function planSectionGroup(
+  primary: Omit<ScheduledSection, 'addedAt' | 'pairedWith'>,
+  companions: Array<Omit<ScheduledSection, 'addedAt' | 'pairedWith'>>,
+  area: StorageAreaLike = defaultStorageArea(),
+  now: () => number = Date.now,
+): Promise<void> {
+  return enqueueWrite(async () => {
+    const replaced = new Set(
+      [primary, ...companions].map((section) => sectionKey(section.term, section.classNumber)),
+    );
+    const kept = withoutGroup(await readSchedule(area), primary.term, primary.classNumber).filter(
+      (entry) => !replaced.has(sectionKey(entry.term, entry.classNumber)),
+    );
+    const addedAt = now();
+    const group: ScheduledSection[] = [
+      { ...primary, pairedWith: null, addedAt },
+      ...companions.map((companion) => ({
+        ...companion,
+        pairedWith: primary.classNumber,
+        addedAt,
+      })),
+    ];
+
+    // The cap applies to whole groups: a lecture saved without the recitation
+    // it was planned with would be exactly the state this exists to prevent.
+    if (kept.length + group.length > SCHEDULE_LIMIT) {
+      throw new Error('The schedule is full.');
+    }
+    await area.set({ [SCHEDULE_STORAGE_KEY]: [...kept, ...group] });
+  });
+}
+
+/** The recitations and labs planned with a section, in the order they were added. */
+export function companionsOf(
+  sections: ScheduledSection[],
+  term: string,
+  classNumber: string,
+): ScheduledSection[] {
+  return sections.filter((entry) => entry.term === term && entry.pairedWith === classNumber);
+}
+
+/**
+ * A section and everything paired with it gone. Removing a lecture takes its
+ * recitation with it, since the recitation cannot be taken on its own.
+ */
+function withoutGroup(
+  sections: ScheduledSection[],
+  term: string,
+  classNumber: string,
+): ScheduledSection[] {
+  return sections.filter(
+    (entry) =>
+      entry.term !== term ||
+      (entry.classNumber !== classNumber && entry.pairedWith !== classNumber),
+  );
+}
+
+export interface SectionGroup {
+  primary: ScheduledSection;
+  companions: ScheduledSection[];
+}
+
+/**
+ * The schedule as it should be listed: each lecture with its recitation and
+ * lab beneath it. A companion whose lecture is missing — only possible in data
+ * written by hand — is listed on its own rather than hidden.
+ */
+export function groupSections(sections: ScheduledSection[]): SectionGroup[] {
+  const present = new Set(sections.map((entry) => sectionKey(entry.term, entry.classNumber)));
+  return sections
+    .filter(
+      (entry) =>
+        entry.pairedWith === null || !present.has(sectionKey(entry.term, entry.pairedWith)),
+    )
+    .map((primary) => ({
+      primary,
+      companions:
+        primary.pairedWith === null
+          ? companionsOf(sections, primary.term, primary.classNumber)
+          : [],
+    }));
 }
 
 export function clearSchedule(area: StorageAreaLike = defaultStorageArea()): Promise<void> {
