@@ -9,8 +9,10 @@ export default {
     extend: {
       colors: {
         // Neutral surfaces shared with the on-page UI in src/content/theme.ts.
-        surface: { DEFAULT: '#ffffff', sunken: '#f5f5f5', dark: '#262626', darksunken: '#1c1c1c' },
-        line: { DEFAULT: '#e4e4e4', strong: '#d4d4d4', dark: '#3a3a3a', darkstrong: '#4a4a4a' },
+        // In the dark theme the fill for chips and cards is lighter than the page,
+        // since a raised surface catches light; darker would read as a hole.
+        surface: { DEFAULT: '#ffffff', sunken: '#f4f4f5', dark: '#1f1f1f', darksunken: '#2a2a2a' },
+        line: { DEFAULT: '#e8e8e8', strong: '#d4d4d4', dark: '#333333', darkstrong: '#4a4a4a' },
         ink: { DEFAULT: '#1f1f1f', muted: '#737373', faint: '#a3a3a3' },
         inkdark: { DEFAULT: '#ededed', muted: '#9e9e9e', faint: '#6f6f6f' },
         tone: { good: '#1f9d63', fair: '#c47f10', poor: '#d24b45' },

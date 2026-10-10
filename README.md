@@ -9,7 +9,7 @@ Verdct is a Chrome extension that shows RateMyProfessor ratings right inside ASU
 - **Best section labels** mark the best sections of each course: "Best rated" (highest rating) and "Best overall" (good rating, not too hard).
 - **Trend arrows** (▲ ▼) show if a professor's recent reviews are better or worse than older ones.
 - **Favorites** let you save professors to a shortlist.
-- **Schedule builder**: click **+ Plan** on a class to add it to a weekly calendar in the popup. Classes that overlap turn amber.
+- **Schedule builder**: click **+ Plan** on a class to add it to a weekly calendar in the popup. Classes that overlap turn red. **Copy class #s** puts every class number on your clipboard, ready to paste into registration, or click one number to copy just that one.
 - **Popup** with a rating vs. difficulty chart, your favorites, your schedule, and settings (theme, colors, cache).
 
 ## Install

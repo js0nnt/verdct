@@ -23,11 +23,18 @@ export function WeekGrid({ sections }: { sections: ScheduledSection[] }) {
   if (layout.blocks.length === 0) return null;
 
   const marks = hourMarks(layout);
+  // Ordered by start time across the whole week, not per column, so the
+  // morning fills in before the afternoon whichever day it falls on.
+  const blockOrder = new Map(
+    [...layout.blocks]
+      .sort((left, right) => left.startMinutes - right.startMinutes)
+      .map((block, position) => [block, position]),
+  );
   const spanMinutes = layout.endMinutes - layout.startMinutes;
   const bodyHeight = (spanMinutes / 60) * HOUR_HEIGHT_PX;
 
   return (
-    <div className="mt-2 select-none">
+    <div className="select-none">
       <div className="flex" style={{ paddingLeft: GUTTER_WIDTH_PX }}>
         {layout.days.map((day) => (
           <div
@@ -52,12 +59,12 @@ export function WeekGrid({ sections }: { sections: ScheduledSection[] }) {
           ))}
         </div>
 
-        <div className="relative flex flex-1 rounded-md border border-line dark:border-line-dark">
+        <div className="relative flex flex-1 overflow-hidden rounded-xl bg-surface-sunken/60 ring-1 ring-inset ring-line dark:bg-surface-darksunken/40 dark:ring-line-dark">
           {marks.slice(1, -1).map((minute) => (
             <span
               key={minute}
               aria-hidden="true"
-              className="absolute inset-x-0 border-t border-line dark:border-line-dark"
+              className="absolute inset-x-0 border-t border-dashed border-line dark:border-line-dark"
               style={{ top: ((minute - layout.startMinutes) / 60) * HOUR_HEIGHT_PX }}
             />
           ))}
@@ -69,7 +76,7 @@ export function WeekGrid({ sections }: { sections: ScheduledSection[] }) {
             >
               {layout.blocks
                 .filter((block) => block.day === day)
-                .map((block, position) => {
+                .map((block) => {
                   const top = ((block.startMinutes - layout.startMinutes) / 60) * HOUR_HEIGHT_PX;
                   const height = Math.max(
                     MINIMUM_BLOCK_PX,
@@ -84,19 +91,19 @@ export function WeekGrid({ sections }: { sections: ScheduledSection[] }) {
                         `${formatClockTime(block.endMinutes)}` +
                         (block.conflicted ? '\nOverlaps another section' : '')
                       }
-                      className={`v-block absolute overflow-hidden rounded-[3px] border px-1 text-[8.5px] font-semibold leading-[11px] transition-shadow duration-150 hover:shadow-sm ${
+                      className={`v-block absolute overflow-hidden rounded-[5px] border-l-2 py-px pl-1 pr-0.5 text-[8.5px] font-semibold leading-[11px] transition-[filter] duration-150 hover:brightness-95 dark:hover:brightness-125 ${
                         block.conflicted
-                          ? 'border-tone-poor bg-tone-poor/15 text-tone-poor dark:border-tonedark-poor dark:bg-tonedark-poor/20 dark:text-tonedark-poor'
-                          : 'border-tone-good bg-tone-good/12 text-tone-good dark:border-tonedark-good dark:bg-tonedark-good/20 dark:text-tonedark-good'
+                          ? 'border-tone-poor bg-tone-poor/[0.14] text-tone-poor dark:border-tonedark-poor dark:bg-tonedark-poor/20 dark:text-tonedark-poor'
+                          : 'border-ink/70 bg-ink/[0.07] text-ink dark:border-inkdark/70 dark:bg-inkdark/[0.09] dark:text-inkdark'
                       }`}
                       style={{
-                        top,
-                        height,
-                        left: `${(block.lane / block.lanes) * 100}%`,
-                        width: `${(1 / block.lanes) * 100}%`,
-                        // Blocks drop in down the column, so the week fills in
-                        // the way it reads rather than all at once.
-                        animationDelay: `${Math.min(position, 6) * 45}ms`,
+                        top: top + 1,
+                        height: height - 2,
+                        left: `calc(${(block.lane / block.lanes) * 100}% + 2px)`,
+                        width: `calc(${(1 / block.lanes) * 100}% - 4px)`,
+                        // Blocks drop in down the week, so it fills in the way
+                        // it reads rather than all at once.
+                        ['--i' as string]: blockOrder.get(block) ?? 0,
                       }}
                     >
                       {block.courseId}

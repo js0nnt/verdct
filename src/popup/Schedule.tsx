@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { readCachedRating } from '../background/cache';
 import { normalizeProfessorName } from '../background/nameMatcher';
 import {
+  classNumberList,
   clearSchedule,
   findConflicts,
   formatClockTime,
@@ -12,11 +13,19 @@ import {
   termLabel,
   type ScheduledSection,
 } from '../shared/schedule';
+import type { ReportStatus } from './App';
+import { useCopy, useLeaving } from './motion';
+import { RemoveButton } from './RemoveButton';
+import { SectionLabel } from './SectionLabel';
+import { Segmented } from './Segmented';
 import { ToneBadge, toneFor } from './ToneBadge';
 import { WeekGrid } from './WeekGrid';
 
 /** Ratings joined to the schedule, keyed by the normalized instructor name. */
 type RatingsByName = Map<string, number | null>;
+
+/** How long "Clear all" waits for its confirming second press. */
+const CLEAR_CONFIRM_MS = 3_000;
 
 function meetingLine(section: ScheduledSection): string {
   if (section.meetings.length === 0) return 'No meeting time';
@@ -29,12 +38,9 @@ function meetingLine(section: ScheduledSection): string {
     .join(' · ');
 }
 
-function unitsLine(sections: ScheduledSection[]): string {
+function unitsText(sections: ScheduledSection[]): string {
   const totals = scheduleTotals(sections);
-  const units = totals.unitsMax > totals.units
-    ? `${totals.units}–${totals.unitsMax}`
-    : `${totals.units}`;
-  return `${totals.sections} section${totals.sections === 1 ? '' : 's'} · ${units} units`;
+  return totals.unitsMax > totals.units ? `${totals.units}–${totals.unitsMax}` : `${totals.units}`;
 }
 
 /**
@@ -50,10 +56,31 @@ function asynchronousNote(sections: ScheduledSection[]): string | null {
     : `${asynchronous} sections have no meeting time and are not on the grid.`;
 }
 
-export function Schedule() {
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true">
+      <rect x="4.25" y="4.25" width="7.5" height="7.5" rx="1.75" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M2.25 9.25v-5.5a1.5 1.5 0 0 1 1.5-1.5h5.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 14 14" width="12" height="12" aria-hidden="true" className="v-check">
+      <path d="M2.75 7.25l2.75 2.75 5.75-6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function Schedule({ onStatus }: { onStatus: ReportStatus }) {
   const [sections, setSections] = useState<ScheduledSection[] | null>(null);
   const [activeTerm, setActiveTerm] = useState<string | null>(null);
   const [ratings, setRatings] = useState<RatingsByName>(new Map());
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  const clearTimer = useRef<number | undefined>(undefined);
+  const { leaving, leave } = useLeaving();
+  const { copied, copy } = useCopy();
 
   const load = useCallback(() => {
     void readSchedule().then(setSections);
@@ -68,6 +95,8 @@ export function Schedule() {
     chrome.storage.onChanged.addListener(onChanged);
     return () => chrome.storage.onChanged.removeListener(onChanged);
   }, [load]);
+
+  useEffect(() => () => window.clearTimeout(clearTimer.current), []);
 
   useEffect(() => {
     if (!sections) return;
@@ -106,94 +135,128 @@ export function Schedule() {
     [conflicts],
   );
 
-  async function handleRemove(section: ScheduledSection): Promise<void> {
-    await removeScheduledSection(section.term, section.classNumber);
-    load();
+  const status =
+    sections === null
+      ? null
+      : shown.length === 0
+        ? 'Nothing planned'
+        : `${termLabel(term)} · ${unitsText(shown)} units`;
+  useEffect(() => {
+    if (status) onStatus(status);
+  }, [status, onStatus]);
+
+  function handleRemove(section: ScheduledSection): void {
+    leave(`${section.term}:${section.classNumber}`, () =>
+      removeScheduledSection(section.term, section.classNumber).then(load),
+    );
   }
 
-  async function handleClear(): Promise<void> {
-    await clearSchedule();
-    load();
+  /**
+   * Two presses, because a whole schedule is a lot to lose to one stray click.
+   * The first only arms the button, and it disarms itself after a moment.
+   */
+  function handleClear(): void {
+    window.clearTimeout(clearTimer.current);
+    if (!confirmingClear) {
+      setConfirmingClear(true);
+      clearTimer.current = window.setTimeout(() => setConfirmingClear(false), CLEAR_CONFIRM_MS);
+      return;
+    }
+    setConfirmingClear(false);
+    void clearSchedule().then(load);
   }
 
-  if (sections === null) {
-    return <p className="text-xs text-ink-faint dark:text-inkdark-faint">Reading your schedule…</p>;
-  }
+  if (sections === null) return null;
 
   if (sections.length === 0) {
     return (
       <section>
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-faint dark:text-inkdark-faint">
-          Schedule
-        </h2>
-        <p className="mt-2 text-[11px] leading-4 text-ink-faint dark:text-inkdark-faint">
-          Run a search on ASU Class Search and press{' '}
-          <span className="text-ink-muted dark:text-inkdark-muted">+ Plan</span> beside a class
-          number to build a schedule here. Sections are tracked by class number, so two sections of
-          the same course with the same professor stay separate.
-        </p>
+        <div className="v-rise" style={{ ['--i' as string]: 0 }}>
+          <SectionLabel>Schedule</SectionLabel>
+        </div>
+        <div
+          className="v-rise mt-3 rounded-2xl bg-surface-sunken px-6 pb-6 pt-5 text-center dark:bg-surface-darksunken"
+          style={{ ['--i' as string]: 1 }}
+        >
+          <EmptyWeek />
+          <p className="mt-3 text-[12px] font-semibold">Your week is empty</p>
+          <p className="mx-auto mt-1 max-w-[240px] text-[11px] leading-4 text-ink-muted dark:text-inkdark-muted">
+            On ASU Class Search, press{' '}
+            <span className="font-semibold text-ink dark:text-inkdark">+ Plan</span> beside a class
+            number. It lands here, on a calendar, with any overlaps called out.
+          </p>
+        </div>
       </section>
     );
   }
 
+  const allCopied = copied === 'all';
+
   return (
     <section>
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-faint dark:text-inkdark-faint">
-          Schedule
-        </h2>
-        <button
-          type="button"
-          onClick={() => void handleClear()}
-          className="text-[10.5px] text-ink-faint hover:text-ink dark:text-inkdark-faint dark:hover:text-inkdark"
-        >
-          Clear all
-        </button>
-      </div>
-
       {terms.length > 1 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {terms.map((candidate) => (
-            <button
-              key={candidate}
-              type="button"
-              aria-pressed={candidate === term}
-              onClick={() => setActiveTerm(candidate)}
-              className={`rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${
-                candidate === term
-                  ? 'border-line-strong bg-surface-sunken text-ink dark:border-line-darkstrong dark:bg-surface-darksunken dark:text-inkdark'
-                  : 'border-line text-ink-muted dark:border-line-dark dark:text-inkdark-muted'
-              }`}
-            >
-              {termLabel(candidate)}
-            </button>
-          ))}
+        <div className="v-rise mb-3" style={{ ['--i' as string]: 0 }}>
+          <Segmented
+            label="Term"
+            options={terms.map((candidate) => ({ id: candidate, label: termLabel(candidate) }))}
+            value={term}
+            onChange={setActiveTerm}
+          />
         </div>
       )}
 
-      <p className="mt-1.5 text-[11px] text-ink-muted dark:text-inkdark-muted">
-        {termLabel(term)} · {unitsLine(shown)}
-      </p>
+      <div className="v-rise flex items-end justify-between gap-3" style={{ ['--i' as string]: 0 }}>
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-[30px] font-semibold leading-none tracking-tight tabular-nums">
+            {unitsText(shown)}
+          </span>
+          <span className="text-[11px] text-ink-muted dark:text-inkdark-muted">
+            units · {shown.length} section{shown.length === 1 ? '' : 's'}
+          </span>
+        </div>
 
-      <WeekGrid sections={shown} />
+        <button
+          type="button"
+          onClick={() => copy('all', classNumberList(shown))}
+          title={classNumberList(shown)}
+          className={`flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-semibold transition-[background-color,color,transform] duration-200 active:scale-95 ${
+            allCopied
+              ? 'bg-tone-good/12 text-tone-good dark:bg-tonedark-good/15 dark:text-tonedark-good'
+              : 'bg-ink text-white hover:bg-black dark:bg-inkdark dark:text-[#1a1a1a] dark:hover:bg-white'
+          }`}
+        >
+          {allCopied ? <CheckIcon /> : <CopyIcon />}
+          <span aria-live="polite">{allCopied ? 'Copied' : 'Copy class #s'}</span>
+        </button>
+      </div>
+
+      <div className="v-rise mt-4" style={{ ['--i' as string]: 1 }}>
+        <WeekGrid sections={shown} />
+      </div>
 
       {asynchronousNote(shown) && (
-        <p className="mt-1.5 text-[10.5px] text-ink-faint dark:text-inkdark-faint">
+        <p
+          className="v-rise mt-2 text-[10.5px] text-ink-faint dark:text-inkdark-faint"
+          style={{ ['--i' as string]: 2 }}
+        >
           {asynchronousNote(shown)}
         </p>
       )}
 
       {conflicts.length > 0 && (
-        <div className="mt-3 rounded-md border border-tone-poor/40 bg-tone-poor/[0.07] px-2.5 py-2 dark:border-tonedark-poor/40 dark:bg-tonedark-poor/10">
-          <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-tone-poor dark:text-tonedark-poor">
+        <div
+          className="v-rise mt-3 rounded-2xl bg-tone-poor/[0.08] px-3.5 py-2.5 dark:bg-tonedark-poor/[0.12]"
+          style={{ ['--i' as string]: 2 }}
+        >
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold text-tone-poor dark:text-tonedark-poor">
+            <span className="h-1.5 w-1.5 rounded-full bg-current" />
             {conflicts.length} overlap{conflicts.length === 1 ? '' : 's'}
           </p>
           <ul className="mt-1 space-y-0.5">
-            {conflicts.map((conflict, position) => (
+            {conflicts.map((conflict) => (
               <li
                 key={`${conflict.left}-${conflict.right}-${conflict.day}-${conflict.startMinutes}`}
-                style={{ animationDelay: `${Math.min(position, 6) * 40}ms` }}
-                className="v-rise text-[10.5px] leading-4 text-ink-muted dark:text-inkdark-muted"
+                className="text-[10.5px] leading-4 text-ink-muted dark:text-inkdark-muted"
               >
                 {nameOf(conflict.left)} and {nameOf(conflict.right)} both meet {conflict.day}{' '}
                 {formatClockTime(conflict.startMinutes)} – {formatClockTime(conflict.endMinutes)}.
@@ -203,70 +266,137 @@ export function Schedule() {
         </div>
       )}
 
-      <ul className="mt-3 space-y-2">
-        {shown.map((section, position) => (
-          <li
-            key={`${section.term}:${section.classNumber}`}
-            // Staggered by position so the list assembles downwards rather than
-            // appearing all at once, which reads as a page that simply loaded.
-            style={{ animationDelay: `${Math.min(position, 8) * 30}ms` }}
-            className="v-rise rounded-md border border-line px-2.5 py-2 transition-colors duration-200 hover:border-line-strong dark:border-line-dark dark:hover:border-line-darkstrong"
-          >
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-[12px] font-semibold">{section.courseId}</span>
-              <span className="text-[10.5px] tabular-nums text-ink-faint dark:text-inkdark-faint">
-                #{section.classNumber}
-              </span>
-              {conflicted.has(section.classNumber) && (
-                <span className="text-[9.5px] font-semibold uppercase tracking-[0.06em] text-tone-poor dark:text-tonedark-poor">
-                  Overlap
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={() => void handleRemove(section)}
-                aria-label={`Remove ${section.courseId} section ${section.classNumber} from your schedule`}
-                className="ml-auto shrink-0 rounded px-1 text-xs text-ink-faint hover:bg-surface-sunken hover:text-ink dark:text-inkdark-faint dark:hover:bg-surface-darksunken dark:hover:text-inkdark"
-              >
-                ×
-              </button>
-            </div>
+      <div className="v-rise mt-6 flex items-baseline justify-between" style={{ ['--i' as string]: 3 }}>
+        <SectionLabel>Sections</SectionLabel>
+        <button
+          type="button"
+          onClick={handleClear}
+          className={`text-[10.5px] font-medium transition-colors duration-200 ${
+            confirmingClear
+              ? 'text-tone-poor dark:text-tonedark-poor'
+              : 'text-ink-faint hover:text-ink dark:text-inkdark-faint dark:hover:text-inkdark'
+          }`}
+        >
+          {confirmingClear ? 'Press again to clear' : 'Clear all'}
+        </button>
+      </div>
 
-            {section.courseTitle && (
-              <p className="truncate text-[10.5px] text-ink-muted dark:text-inkdark-muted">
-                {section.courseTitle}
-              </p>
-            )}
+      <ul className="mt-1">
+        {shown.map((section, position) => {
+          const key = `${section.term}:${section.classNumber}`;
+          const numberCopied = copied === key;
+          return (
+            <li
+              key={key}
+              data-leaving={leaving.has(key)}
+              className="v-collapse v-rise"
+              style={{ ['--i' as string]: position + 4 }}
+            >
+              <div>
+                <div className="group border-b border-line py-3 dark:border-line-dark">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[13px] font-semibold tracking-tight">{section.courseId}</span>
+                    <button
+                      type="button"
+                      onClick={() => copy(key, section.classNumber)}
+                      aria-label={`Copy class number ${section.classNumber}`}
+                      title="Copy class number"
+                      className={`flex h-5 items-center gap-1 rounded-full px-1.5 text-[10.5px] font-medium tabular-nums transition-colors duration-200 ${
+                        numberCopied
+                          ? 'bg-tone-good/12 text-tone-good dark:bg-tonedark-good/15 dark:text-tonedark-good'
+                          : 'bg-surface-sunken text-ink-muted hover:text-ink dark:bg-surface-darksunken dark:text-inkdark-muted dark:hover:text-inkdark'
+                      }`}
+                    >
+                      {numberCopied ? <CheckIcon /> : <span className="opacity-60">#</span>}
+                      {section.classNumber}
+                    </button>
+                    {conflicted.has(section.classNumber) && (
+                      <span className="text-[9.5px] font-semibold uppercase tracking-[0.08em] text-tone-poor dark:text-tonedark-poor">
+                        Overlap
+                      </span>
+                    )}
+                    <RemoveButton
+                      label={`Remove ${section.courseId} section ${section.classNumber} from your schedule`}
+                      onClick={() => handleRemove(section)}
+                    />
+                  </div>
 
-            <p className="mt-1 text-[10.5px] tabular-nums text-ink-muted dark:text-inkdark-muted">
-              {meetingLine(section)}
-            </p>
-            <p className="text-[10.5px] text-ink-faint dark:text-inkdark-faint">
-              {[
-                section.location,
-                section.dates && `${section.dates.start} – ${section.dates.end}`,
-                section.seatsTotal !== null && `${section.seatsOpen} of ${section.seatsTotal} seats`,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </p>
+                  {section.courseTitle && (
+                    <p className="mt-0.5 truncate text-[11px] text-ink-muted dark:text-inkdark-muted">
+                      {section.courseTitle}
+                    </p>
+                  )}
 
-            {section.instructors.length > 0 && (
-              <ul className="mt-1.5 space-y-1">
-                {section.instructors.map((instructor) => {
-                  const rating = ratings.get(normalizeProfessorName(instructor)) ?? null;
-                  return (
-                    <li key={instructor} className="flex items-center gap-2 text-[11px]">
-                      <ToneBadge tone={toneFor(rating)} value={rating} />
-                      <span className="truncate">{instructor}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </li>
-        ))}
+                  <p className="mt-1.5 text-[11px] font-medium tabular-nums">{meetingLine(section)}</p>
+                  <p className="text-[10.5px] text-ink-faint dark:text-inkdark-faint">
+                    {[
+                      section.location,
+                      section.dates && `${section.dates.start} – ${section.dates.end}`,
+                      section.seatsTotal !== null &&
+                        `${section.seatsOpen} of ${section.seatsTotal} seats`,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+
+                  {section.instructors.length > 0 && (
+                    <ul className="mt-2 space-y-1">
+                      {section.instructors.map((instructor) => {
+                        const rating = ratings.get(normalizeProfessorName(instructor)) ?? null;
+                        return (
+                          <li key={instructor} className="flex items-center gap-2 text-[11.5px]">
+                            <ToneBadge tone={toneFor(rating)} value={rating} />
+                            <span className="truncate">{instructor}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </section>
+  );
+}
+
+/** A faint week of columns with a couple of blocks, standing in for the calendar. */
+function EmptyWeek() {
+  const blocks = [
+    [0, 8, 14],
+    [1, 22, 12],
+    [2, 8, 14],
+    [3, 22, 12],
+    [4, 34, 10],
+  ];
+  return (
+    <svg viewBox="0 0 110 60" className="mx-auto h-[66px] w-[120px]" aria-hidden="true">
+      {[0, 1, 2, 3, 4].map((column) => (
+        <rect
+          key={column}
+          x={column * 22 + 1}
+          y="1"
+          width="20"
+          height="58"
+          rx="4"
+          className="fill-none stroke-line-strong dark:stroke-line-darkstrong"
+          strokeWidth="1"
+        />
+      ))}
+      {blocks.map(([column, y, height], position) => (
+        <rect
+          key={position}
+          x={column * 22 + 4}
+          y={y}
+          width="14"
+          height={height}
+          rx="2.5"
+          style={{ ['--i' as string]: position }}
+          className="v-block fill-line-strong dark:fill-line-darkstrong"
+        />
+      ))}
+    </svg>
   );
 }

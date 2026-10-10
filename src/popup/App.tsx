@@ -1,34 +1,56 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { DEFAULT_SETTINGS, readSettings } from '../shared/settings';
 import type { VerdctSettings } from '../shared/types';
+import { Dock, OverviewIcon, ScheduleIcon, SettingsIcon, type DockItem } from './Dock';
 import { Home } from './Home';
+import { RollingText } from './RollingText';
 import { Schedule } from './Schedule';
 import { Settings } from './Settings';
 import { useTheme } from './useTheme';
 
 type Tab = 'home' | 'schedule' | 'settings';
 
-const TABS: Array<{ id: Tab; label: string }> = [
-  { id: 'home', label: 'Overview' },
-  { id: 'schedule', label: 'Schedule' },
-  { id: 'settings', label: 'Settings' },
+const TABS: Array<DockItem<Tab>> = [
+  { id: 'home', label: 'Overview', icon: <OverviewIcon /> },
+  { id: 'schedule', label: 'Schedule', icon: <ScheduleIcon /> },
+  { id: 'settings', label: 'Settings', icon: <SettingsIcon /> },
 ];
 
-/** Where the active-tab underline sits, measured from the button it belongs to. */
-interface Indicator {
-  left: number;
-  width: number;
+/** Something each panel says about itself, shown in the header while it is open. */
+export type ReportStatus = (status: string) => void;
+
+const tabId = (tab: Tab): string => `verdct-tab-${tab}`;
+const panelId = (tab: Tab): string => `verdct-panel-${tab}`;
+
+function versionLabel(): string {
+  // Absent outside the extension, in the design harness.
+  const version = globalThis.chrome?.runtime?.getManifest?.().version;
+  return version ? `Version ${version}` : 'Preferences';
 }
 
 export function App() {
   const [tab, setTab] = useState<Tab>('home');
   const [settings, setSettings] = useState<VerdctSettings>(DEFAULT_SETTINGS);
-  const [indicator, setIndicator] = useState<Indicator | null>(null);
-  const [scrolled, setScrolled] = useState(false);
+  const [scrolled, setScrolled] = useState<Record<Tab, boolean>>({
+    home: false,
+    schedule: false,
+    settings: false,
+  });
+  const [status, setStatus] = useState<Record<Tab, string>>({
+    home: 'Reading this tab…',
+    schedule: 'Reading your schedule…',
+    settings: versionLabel(),
+  });
 
-  const navRef = useRef<HTMLDivElement>(null);
-  const previousIndex = useRef(0);
+  const index = TABS.findIndex((entry) => entry.id === tab);
+  const previousIndex = useRef(index);
+  // The header rolls the same way the pages slide: moving right, the old status
+  // lifts out of the way; moving back left, it drops.
+  const rollDirection = index >= previousIndex.current ? 'up' : 'down';
+  useEffect(() => {
+    previousIndex.current = index;
+  }, [index]);
 
   useEffect(() => {
     void readSettings().then(setSettings);
@@ -36,101 +58,76 @@ export function App() {
 
   useTheme(settings.theme);
 
-  useEffect(() => {
-    // Without this the sticky header and the content under it share an edge and
-    // read as one surface, so a card sliding beneath looks like a glitch.
-    const onScroll = (): void => setScrolled(window.scrollY > 2);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+  const reporters = useRef<Record<Tab, ReportStatus> | null>(null);
+  const report = (panel: Tab): ReportStatus => (text) =>
+    setStatus((current) => (current[panel] === text ? current : { ...current, [panel]: text }));
+  reporters.current ??= {
+    home: report('home'),
+    schedule: report('schedule'),
+    settings: report('settings'),
+  };
+
+  const onScroll = useCallback((panel: Tab, top: number) => {
+    setScrolled((current) => (current[panel] === top > 2 ? current : { ...current, [panel]: top > 2 }));
   }, []);
 
-  const index = TABS.findIndex((entry) => entry.id === tab);
-  // Read during render so the panel and the underline move the same way; the
-  // ref catches up afterwards, ready for the next switch.
-  const enteringFrom = index >= previousIndex.current ? 'right' : 'left';
-
-  useLayoutEffect(() => {
-    previousIndex.current = index;
-
-    // Measured rather than declared: the tab labels are words of different
-    // lengths, and a hardcoded width would drift the moment one is renamed.
-    const active = navRef.current?.querySelector<HTMLElement>('[data-active="true"]');
-    if (active) {
-      setIndicator({ left: active.offsetLeft, width: active.offsetWidth });
-    }
-
-    // A new panel starts at its own beginning. Instant, because a smooth scroll
-    // to the top competing with the panel sliding in reads as two animations
-    // disagreeing about what just happened.
-    window.scrollTo({ top: 0, behavior: 'instant' });
-  }, [index]);
-
   return (
-    <main className="v-app flex w-80 flex-col bg-surface text-ink dark:bg-surface-dark dark:text-inkdark">
-      {/* Held at the top, so a long schedule scrolls under the tabs rather than
-          carrying them off screen with it. */}
-      <div
-        className={`sticky top-0 z-10 bg-surface transition-shadow duration-200 dark:bg-surface-dark ${
-          scrolled ? 'shadow-[0_8px_16px_-12px_rgba(15,15,15,0.55)]' : ''
-        }`}
-      >
-        <header className="flex items-center gap-2.5 px-5 pt-5">
-          <span className="verdct-mark h-5 w-5 rounded-md" aria-hidden="true" />
-          <p className="text-[13px] font-semibold tracking-tight">Verdct</p>
-        </header>
+    <main className="v-app relative flex h-full flex-col overflow-clip bg-surface text-ink dark:bg-surface-dark dark:text-inkdark">
+      <header className="relative z-10 flex h-[52px] shrink-0 items-center gap-2.5 px-5">
+        <span className="verdct-mark h-[18px] w-[18px] rounded-[5px]" aria-hidden="true" />
+        <p className="text-[13px] font-semibold tracking-tight">Verdct</p>
+        <RollingText
+          text={status[tab]}
+          direction={rollDirection}
+          className="ml-auto min-w-0 justify-items-end text-[11px] font-medium tabular-nums text-ink-faint dark:text-inkdark-faint"
+        />
 
+        {/* A hairline only once the page has scrolled under the header. At the
+            top there is nothing to separate it from. */}
+        <span
+          aria-hidden="true"
+          className={`absolute inset-x-5 bottom-0 h-px bg-line transition-opacity duration-300 dark:bg-line-dark ${
+            scrolled[tab] ? 'opacity-100' : 'opacity-0'
+          }`}
+        />
+      </header>
+
+      {/* Clipped rather than hidden: an overflow-hidden box can still be
+          scrolled by the browser, and focusing a control on another page
+          would drag the whole track sideways to show it. */}
+      <div className="relative min-h-0 flex-1 overflow-clip">
         <div
-          ref={navRef}
-          role="tablist"
-          aria-label="Sections"
-          className="relative mt-4 flex gap-1 border-b border-line px-3 dark:border-line-dark"
+          className="v-track absolute inset-y-0 left-0 flex"
+          style={{ width: `${TABS.length * 100}%`, transform: `translateX(${(-index * 100) / TABS.length}%)` }}
         >
-          {TABS.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              role="tab"
-              id={`verdct-tab-${entry.id}`}
-              aria-controls="verdct-panel"
-              data-active={tab === entry.id}
-              aria-selected={tab === entry.id}
-              onClick={() => setTab(entry.id)}
-              className={`px-2.5 py-2 text-xs font-semibold transition-colors duration-200 ${
-                tab === entry.id
-                  ? 'text-ink dark:text-inkdark'
-                  : 'text-ink-faint hover:text-ink-muted dark:text-inkdark-faint dark:hover:text-inkdark-muted'
-              }`}
-            >
-              {entry.label}
-            </button>
-          ))}
-
-          {/* One underline that travels, rather than three that blink on and off. */}
-          {indicator && (
-            <span
-              aria-hidden="true"
-              className="absolute -bottom-px h-0.5 rounded-full bg-ink transition-[left,width] duration-300 ease-out dark:bg-inkdark"
-              style={{ left: indicator.left, width: indicator.width }}
-            />
-          )}
+          {TABS.map((entry) => {
+            const active = entry.id === tab;
+            return (
+              <section
+                key={entry.id}
+                id={panelId(entry.id)}
+                role="tabpanel"
+                aria-labelledby={tabId(entry.id)}
+                data-active={active}
+                // Off-screen pages are out of the tab order and hidden from
+                // assistive tech, but stay mounted so they keep their place.
+                inert={!active}
+                onScroll={(event) => onScroll(entry.id, event.currentTarget.scrollTop)}
+                className="v-panel v-scroll h-full px-5 pb-24 pt-1"
+                style={{ width: `${100 / TABS.length}%` }}
+              >
+                {entry.id === 'home' && <Home onStatus={reporters.current!.home} />}
+                {entry.id === 'schedule' && <Schedule onStatus={reporters.current!.schedule} />}
+                {entry.id === 'settings' && (
+                  <Settings settings={settings} onSettingsChange={setSettings} />
+                )}
+              </section>
+            );
+          })}
         </div>
       </div>
 
-      {/* Keyed by tab so the entrance animation replays on every switch. */}
-      <div
-        key={tab}
-        id="verdct-panel"
-        role="tabpanel"
-        aria-labelledby={`verdct-tab-${tab}`}
-        className={`px-5 pb-5 pt-4 ${
-          enteringFrom === 'right' ? 'v-panel-right' : 'v-panel-left'
-        }`}
-      >
-        {tab === 'home' && <Home />}
-        {tab === 'schedule' && <Schedule />}
-        {tab === 'settings' && <Settings settings={settings} onSettingsChange={setSettings} />}
-      </div>
+      <Dock items={TABS} value={tab} onChange={setTab} idFor={tabId} panelId={panelId} />
     </main>
   );
 }
