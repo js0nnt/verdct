@@ -24,7 +24,7 @@ export function ScatterChart({ points }: { points: ScatterPoint[] }) {
   return (
     <svg
       viewBox={`0 0 ${PLOT.width} ${PLOT.height}`}
-      className="mt-2 w-full overflow-visible"
+      className="w-full overflow-visible"
       role="img"
       aria-label="Professor rating plotted against course difficulty"
     >
@@ -82,15 +82,19 @@ export function ScatterChart({ points }: { points: ScatterPoint[] }) {
         {HARD_DISLIKED_LABEL}
       </text>
 
-      {placed.map((point) => {
+      {placed.map((point, position) => {
         const tone = toneFor(point.rating) ?? 'fair';
+        // Most-reviewed first, the order they are drawn in, so the biggest
+        // dots land first and the small ones settle in around them.
+        const order = { ['--i' as string]: position };
         return (
           <g key={`${point.name}-${point.cx}-${point.cy}`}>
             <circle
               cx={point.cx}
               cy={point.cy}
               r={point.radius}
-              className={`${TONE_FILL[tone]} stroke-surface dark:stroke-surface-dark`}
+              style={order}
+              className={`v-dot ${TONE_FILL[tone]} stroke-surface dark:stroke-surface-dark`}
               strokeWidth={1.5}
             >
               <title>
@@ -102,7 +106,8 @@ export function ScatterChart({ points }: { points: ScatterPoint[] }) {
                 x={point.label.x}
                 y={point.label.y}
                 textAnchor="middle"
-                className="fill-ink dark:fill-inkdark pointer-events-none text-[9px] font-semibold"
+                style={order}
+                className="v-dot fill-ink dark:fill-inkdark pointer-events-none text-[9px] font-semibold"
               >
                 {point.label.text}
               </text>

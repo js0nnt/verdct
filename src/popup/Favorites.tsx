@@ -3,6 +3,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { readCachedRating } from '../background/cache';
 import { readFavorites, removeFavorite } from '../shared/favorites';
 import type { FavoriteProfessor, ProfessorRating } from '../shared/types';
+import { useLeaving } from './motion';
+import { RemoveButton } from './RemoveButton';
+import { SectionLabel } from './SectionLabel';
 import { ToneBadge, toneFor } from './ToneBadge';
 
 interface FavoriteRow extends FavoriteProfessor {
@@ -12,6 +15,7 @@ interface FavoriteRow extends FavoriteProfessor {
 
 export function Favorites() {
   const [rows, setRows] = useState<FavoriteRow[] | null>(null);
+  const { leaving, leave } = useLeaving();
 
   const load = useCallback(() => {
     void readFavorites()
@@ -28,54 +32,61 @@ export function Favorites() {
 
   useEffect(load, [load]);
 
-  async function handleRemove(normalizedName: string): Promise<void> {
-    await removeFavorite(normalizedName);
-    load();
+  function handleRemove(normalizedName: string): void {
+    leave(normalizedName, async () => {
+      await removeFavorite(normalizedName);
+      load();
+    });
   }
 
-  if (rows === null) {
-    return (
-      <p className="mt-3 text-xs text-ink-faint dark:text-inkdark-faint">Loading favorites…</p>
-    );
-  }
+  if (rows === null) return null;
 
   return (
-    <section className="mt-5 border-t border-line pt-4 dark:border-line-dark">
-      <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-faint dark:text-inkdark-faint">
-        Favorites
-      </h2>
+    <section className="mt-7">
+      <div className="v-rise flex items-baseline justify-between" style={{ ['--i' as string]: 3 }}>
+        <SectionLabel>Favorites</SectionLabel>
+        {rows.length > 0 && (
+          <span className="text-[10.5px] tabular-nums text-ink-faint dark:text-inkdark-faint">
+            {rows.length}
+          </span>
+        )}
+      </div>
 
       {rows.length === 0 ? (
-        <p className="mt-2 text-[11px] leading-4 text-ink-faint dark:text-inkdark-faint">
+        <p
+          className="v-rise mt-2 text-[11px] leading-4 text-ink-faint dark:text-inkdark-faint"
+          style={{ ['--i' as string]: 4 }}
+        >
           Hover a badge on Class Search and choose{' '}
           <span className="text-ink-muted dark:text-inkdark-muted">Save to favorites</span> to
           shortlist a professor here.
         </p>
       ) : (
-        <ul className="mt-2 space-y-1">
+        <ul className="mt-1.5">
           {rows.map((row, position) => (
             <li
               key={row.normalizedName}
-              style={{ animationDelay: `${Math.min(position, 8) * 30}ms` }}
-              className="v-rise flex items-center gap-2 text-sm"
+              data-leaving={leaving.has(row.normalizedName)}
+              className="v-collapse v-rise -mx-2"
+              style={{ ['--i' as string]: position + 4 }}
             >
-              <ToneBadge
-                tone={
-                  row.rating && row.rating.numRatings > 0
-                    ? toneFor(row.rating.overallRating)
-                    : null
-                }
-                value={row.rating?.overallRating ?? null}
-              />
-              <span className="truncate">{row.displayName}</span>
-              <button
-                type="button"
-                onClick={() => void handleRemove(row.normalizedName)}
-                aria-label={`Remove ${row.displayName} from favorites`}
-                className="ml-auto shrink-0 rounded px-1 text-xs text-ink-faint transition-colors duration-150 hover:bg-surface-sunken hover:text-ink dark:text-inkdark-faint dark:hover:bg-surface-darksunken dark:hover:text-inkdark"
-              >
-                ×
-              </button>
+              <div>
+                <div className="group flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors duration-200 hover:bg-surface-sunken dark:hover:bg-surface-darksunken">
+                  <ToneBadge
+                    tone={
+                      row.rating && row.rating.numRatings > 0
+                        ? toneFor(row.rating.overallRating)
+                        : null
+                    }
+                    value={row.rating?.overallRating ?? null}
+                  />
+                  <span className="truncate text-[12.5px] font-medium">{row.displayName}</span>
+                  <RemoveButton
+                    label={`Remove ${row.displayName} from favorites`}
+                    onClick={() => handleRemove(row.normalizedName)}
+                  />
+                </div>
+              </div>
             </li>
           ))}
         </ul>

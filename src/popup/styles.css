@@ -6,18 +6,46 @@
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   /* Both, so form controls follow the OS theme too. */
   color-scheme: light dark;
-}
 
-body {
-  margin: 0;
-  min-width: 20rem;
+  /*
+   * Springs, sampled into CSS `linear()` from a damped oscillator rather than
+   * approximated with a bezier. A bezier cannot overshoot and come back, and
+   * that small settle at the end is most of what makes motion read as physical
+   * instead of tweened.
+   *
+   * soft:   stiffness 240, damping 26 — panels. Barely overshoots; a whole page
+   *         wobbling would be tiring.
+   * bouncy: stiffness 380, damping 24 — small things that move on their own,
+   *         like the dock's pill, overshoot by about 8% and settle.
+   */
+  --v-spring-soft: linear(0, 0.046, 0.145, 0.261, 0.389, 0.51, 0.618, 0.706, 0.783, 0.845, 0.893,
+      0.928, 0.955, 0.975, 0.988, 0.997, 1.002, 1.005, 1.007, 1.007, 1.007, 1.006, 1.005, 1.004,
+      1.004, 1.003, 1.002, 1.002, 1);
+  --v-spring-soft-ms: 560ms;
+  --v-spring-bouncy: linear(0, 0.062, 0.187, 0.353, 0.515, 0.674, 0.803, 0.911, 0.986, 1.04, 1.069,
+      1.082, 1.083, 1.075, 1.064, 1.049, 1.036, 1.023, 1.013, 1.005, 0.999, 0.996, 0.994, 0.993,
+      0.993, 0.994, 0.995, 0.996, 0.997, 0.998, 0.999, 1, 1);
+  --v-spring-bouncy-ms: 560ms;
+  --v-ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 /*
- * Painted on the root as well as the body. A vertical scrollbar makes Chrome
- * widen the popup past the panel, and without this the strip beside it is the
- * browser's own canvas — which under a dark OS theme is black, reading as a
- * broken edge on a light popup.
+ * A fixed frame. Chrome sizes a popup to its document, so a popup whose height
+ * follows its content resizes the window on every tab switch, and a window
+ * resize cannot be animated. Holding the frame still is what lets the panels
+ * slide past each other inside it.
+ */
+html,
+body {
+  margin: 0;
+  width: 360px;
+  height: 560px;
+  overflow: hidden;
+}
+
+/*
+ * Painted on the root as well as the body, so no strip of the browser's own
+ * canvas — black under a dark OS theme — can show at the frame's edge.
  */
 html,
 body {
@@ -26,123 +54,282 @@ body {
 
 @media (prefers-color-scheme: dark) {
   html,
-  body { background: #262626; }
+  body { background: #1f1f1f; }
 }
 
 :root[data-theme="light"],
 :root[data-theme="light"] body { background: #ffffff; }
 
 :root[data-theme="dark"],
-:root[data-theme="dark"] body { background: #262626; }
+:root[data-theme="dark"] body { background: #1f1f1f; }
+
+#root {
+  height: 100%;
+}
 
 /* The one saturated element in the palette, matching the extension mark. */
 .verdct-mark {
   background-image: linear-gradient(135deg, #f4304a, #ff2e7e);
 }
 
+/* ------------------------------------------------------------------ panels */
+
 /*
- * The popup scrolls as one document, with the header and tabs held at the top
- * by `position: sticky`. An inner scroll container was tried first and fought
- * the document's own scrollbar: sizing it needed the height of everything above
- * it as a magic number, and being a few pixels out left two scrollbars on top
- * of each other.
- *
- * The scrollbar is styled through the -webkit- pseudo-elements rather than the
- * standard `scrollbar-color`, which cannot round a thumb or give it a hover
- * state. The two cannot be mixed: where both are set, Chrome honours the
- * standard property and drops this styling entirely.
+ * All three panels sit side by side on one track, and switching tabs slides
+ * the track. Unlike swapping one panel for another, the outgoing page is still
+ * there and visibly leaves while the new one arrives, and each keeps its own
+ * scroll position for when you come back to it.
  */
-html {
-  scroll-behavior: smooth;
-  /* A panel sliding in reaches past the edge for a moment, and without this
-     that shows as a horizontal scrollbar for the length of the animation. */
-  overflow-x: hidden;
+.v-track {
+  transition: transform var(--v-spring-soft-ms) var(--v-spring-soft);
+  will-change: transform;
 }
 
-html::-webkit-scrollbar {
+/* Pages off to the side recede a little, so the move reads as depth. */
+.v-panel {
+  transition:
+    opacity 320ms var(--v-ease-out),
+    transform var(--v-spring-soft-ms) var(--v-spring-soft);
+}
+
+.v-panel[data-active="false"] {
+  opacity: 0;
+  transform: scale(0.94);
+}
+
+/*
+ * Each panel scrolls on its own. The bottom is padded clear of the dock, and
+ * the content fades out under it rather than being cut off by a hard edge.
+ */
+.v-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 88px), transparent calc(100% - 28px));
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 88px), transparent calc(100% - 28px));
+}
+
+/*
+ * The scrollbar is styled through the -webkit- pseudo-elements rather than the
+ * standard `scrollbar-color`, which cannot round a thumb. The two cannot be
+ * mixed: where both are set, Chrome honours the standard property and drops
+ * this styling entirely.
+ */
+.v-scroll::-webkit-scrollbar {
   width: 10px;
 }
 
-html::-webkit-scrollbar-track {
+.v-scroll::-webkit-scrollbar-track {
   background: transparent;
+  margin-block: 4px 72px;
 }
 
-/*
- * The transparent border plus `background-clip` is what makes the thumb read as
- * a floating 4px pill rather than a full-width bar: the border is padding the
- * paint cannot reach.
- */
-html::-webkit-scrollbar-thumb {
+/* A transparent border plus `background-clip` leaves a floating 4px pill. */
+.v-scroll::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   border-radius: 999px;
-  background-color: #dcdcdc;
+  background-color: transparent;
   background-clip: content-box;
 }
 
-html::-webkit-scrollbar-thumb:hover {
-  background-color: #b8b8b8;
+/* Out of the way until the pointer is over the page it belongs to. */
+.v-scroll:hover::-webkit-scrollbar-thumb {
+  background-color: #dcdcdc;
 }
 
-:root[data-theme="dark"]::-webkit-scrollbar-thumb {
+.v-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #b8b8b8 !important;
+}
+
+:root[data-theme="dark"] .v-scroll:hover::-webkit-scrollbar-thumb {
   background-color: #3d3d3d;
 }
 
-:root[data-theme="dark"]::-webkit-scrollbar-thumb:hover {
-  background-color: #585858;
+:root[data-theme="dark"] .v-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #585858 !important;
 }
+
+/* -------------------------------------------------------------- entrances */
 
 /* The popup opens abruptly otherwise, since Chrome paints it fully formed. */
 .v-app {
-  animation: v-fade 180ms ease-out;
+  animation: v-fade 220ms var(--v-ease-out);
 }
 
 /*
- * Panels enter from the side the tab sits on, so the movement agrees with the
- * direction the underline just travelled. Going the other way would read as the
- * content and the tabs disagreeing about what happened.
+ * Content rises into place each time its panel becomes the active one, not
+ * only the first time it mounts. The animation is attached by the active
+ * selector, so it restarts whenever the panel is switched to; inactive panels
+ * hold everything at rest. Order comes from an inline --i.
  */
-.v-panel-right {
-  animation: v-slide-from-right 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
+.v-panel[data-active="true"] .v-rise {
+  animation: v-rise 420ms var(--v-spring-soft) backwards;
+  animation-delay: calc(90ms + min(var(--i, 0), 8) * 32ms);
 }
 
-.v-panel-left {
-  animation: v-slide-from-left 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
-}
-
-/* List items, staggered by an inline animation-delay from their index. */
-.v-rise {
-  animation: v-rise 260ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+/* Lists that grow while their panel is already showing animate on their own. */
+.v-rise-now {
+  animation: v-rise 420ms var(--v-spring-soft) backwards;
+  animation-delay: calc(min(var(--i, 0), 8) * 32ms);
 }
 
 /* Calendar blocks grow down from the hour they start at. */
-.v-block {
-  animation: v-block 240ms cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+.v-panel[data-active="true"] .v-block {
+  animation: v-block 460ms var(--v-spring-bouncy) backwards;
+  animation-delay: calc(160ms + min(var(--i, 0), 10) * 28ms);
+  transform-box: fill-box;
   transform-origin: top center;
 }
+
+/* Chart dots pop out from their own centre. */
+.v-panel[data-active="true"] .v-dot {
+  animation: v-pop 480ms var(--v-spring-bouncy) backwards;
+  animation-delay: calc(140ms + min(var(--i, 0), 12) * 36ms);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* --------------------------------------------------------------------- exits */
+
+/*
+ * A removed row closes the gap it leaves instead of vanishing and letting the
+ * rows below jump up. Collapsing a grid track from 1fr to 0fr animates the
+ * row's real height without measuring it first.
+ */
+.v-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 300ms var(--v-ease-out),
+    opacity 180ms ease-out,
+    transform 300ms var(--v-ease-out);
+}
+
+.v-collapse > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.v-collapse[data-leaving="true"] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateX(12px);
+  pointer-events: none;
+}
+
+/* ----------------------------------------------------------------- rolling */
+
+/* A word that changes rolls over to the next one, like a split-flap board. */
+.v-roll-in-up { animation: v-roll-in-up 420ms var(--v-spring-soft) both; }
+.v-roll-out-up { animation: v-roll-out-up 260ms var(--v-ease-out) both; }
+.v-roll-in-down { animation: v-roll-in-down 420ms var(--v-spring-soft) both; }
+.v-roll-out-down { animation: v-roll-out-down 260ms var(--v-ease-out) both; }
+
+/* The tick in a confirmation draws itself rather than appearing. */
+.v-check path {
+  stroke-dasharray: 14;
+  stroke-dashoffset: 14;
+  animation: v-draw 320ms var(--v-ease-out) 80ms forwards;
+}
+
+/* ----------------------------------------------------------------- sliders */
+
+/* The track fills in the slider's own tone up to the thumb. */
+.v-range {
+  --v-range-rest: #e4e4e4;
+  /* The thumb's centre travels 8px in from each end, so the fill stops there. */
+  --v-range-stop: calc(8px + (100% - 16px) * var(--v-range-at, 0));
+  -webkit-appearance: none;
+  appearance: none;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.v-range[data-tone="good"] { --v-range-fill: #1f9d63; }
+.v-range[data-tone="fair"] { --v-range-fill: #c47f10; }
+:root[data-theme="dark"] .v-range { --v-range-rest: #3a3a3a; }
+:root[data-theme="dark"] .v-range[data-tone="good"] { --v-range-fill: #3cc389; }
+:root[data-theme="dark"] .v-range[data-tone="fair"] { --v-range-fill: #e5a33c; }
+
+.v-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--v-range-fill) 0 var(--v-range-stop),
+    var(--v-range-rest) var(--v-range-stop) 100%
+  );
+}
+
+.v-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12), 0 2px 6px -1px rgba(0, 0, 0, 0.25);
+  transition: transform 260ms var(--v-spring-bouncy);
+}
+
+.v-range:hover::-webkit-slider-thumb { transform: scale(1.12); }
+.v-range:active::-webkit-slider-thumb { transform: scale(0.92); }
+
+.v-range:focus-visible {
+  outline: none;
+}
+
+.v-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(127, 127, 127, 0.35), 0 2px 6px -1px rgba(0, 0, 0, 0.25);
+}
+
+/* -------------------------------------------------------------- keyframes */
 
 @keyframes v-fade {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
-@keyframes v-slide-from-right {
-  from { opacity: 0; transform: translateX(8px); }
-  to { opacity: 1; transform: none; }
-}
-
-@keyframes v-slide-from-left {
-  from { opacity: 0; transform: translateX(-8px); }
-  to { opacity: 1; transform: none; }
-}
-
 @keyframes v-rise {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: none; }
 }
 
 @keyframes v-block {
-  from { opacity: 0; transform: scaleY(0.6); }
+  from { opacity: 0; transform: scaleY(0.4); }
   to { opacity: 1; transform: none; }
+}
+
+@keyframes v-pop {
+  from { opacity: 0; transform: scale(0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes v-roll-in-up {
+  from { opacity: 0; transform: translateY(70%); filter: blur(2px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+@keyframes v-roll-out-up {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-70%); filter: blur(2px); }
+}
+
+@keyframes v-roll-in-down {
+  from { opacity: 0; transform: translateY(-70%); filter: blur(2px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+
+@keyframes v-roll-out-down {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(70%); filter: blur(2px); }
+}
+
+@keyframes v-draw {
+  to { stroke-dashoffset: 0; }
 }
 
 /*
@@ -155,8 +342,10 @@ html::-webkit-scrollbar-thumb:hover {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
     scroll-behavior: auto !important;
   }
 }
