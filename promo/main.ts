@@ -166,13 +166,12 @@ async function buildTable(rows: Row[]): Promise<HTMLElement> {
   return table;
 }
 
-async function mountPopup(width = 320): Promise<HTMLElement> {
+async function mountPopup(): Promise<HTMLElement> {
   const [{ createRoot }, { App }] = await Promise.all([
     import('react-dom/client'),
     import('../src/popup/App'),
   ]);
   const frame = el('div', 'popup-frame');
-  frame.style.width = `${width}px`;
   stage.append(frame);
   createRoot(frame).render((await import('react')).createElement(App));
   await new Promise((r) => setTimeout(r, 400));
@@ -205,7 +204,9 @@ async function mountPopupInto(frame: HTMLElement, tab?: 'Settings'): Promise<voi
       (b) => b.textContent?.trim() === tab,
     );
     button?.click();
-    await new Promise((r) => setTimeout(r, 250));
+    // The page slides in on a spring and its rows rise in after it; capture
+    // once all of that has settled.
+    await new Promise((r) => setTimeout(r, 1_000));
   }
 }
 
@@ -359,7 +360,6 @@ async function render(): Promise<void> {
     content.style.justifyContent = 'flex-start';
     content.style.gap = '52px';
     const frame = el('div', 'popup-frame');
-    frame.style.width = '340px';
     content.append(frame, browserWindow(await buildTable(ROWS.slice(0, 6)), 760));
     root.append(content);
     await highlightBest();
@@ -372,7 +372,6 @@ async function render(): Promise<void> {
     content.style.justifyContent = 'flex-start';
     content.style.gap = '48px';
     const frame = el('div', 'popup-frame');
-    frame.style.width = '340px';
     content.append(frame);
     root.append(content);
     await mountPopupInto(frame, 'Settings');

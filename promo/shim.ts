@@ -3,6 +3,7 @@
  * badge code as an ordinary page. Every pixel in the resulting screenshots is
  * the shipping UI — only the surrounding page and the seeded data are staged.
  */
+import manifest from '../manifest.json';
 import type { ScatterPoint } from '../src/shared/scatterGeometry';
 
 export interface ShimSeed {
@@ -43,6 +44,7 @@ export function installChromeShim(seed: ShimSeed): void {
     tabs: { query: async () => [{ id: 1 }] },
     runtime: {
       lastError: undefined,
+      getManifest: () => manifest,
       sendMessage: (_message: unknown, callback?: (response: unknown) => void) => {
         callback?.({ ok: true, data: { courses: seed.courses, updatedAt: Date.now() } });
       },

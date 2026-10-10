@@ -11,8 +11,11 @@
        */
       html { color-scheme: light; }
       html, body { margin: 0; padding: 0; }
-      /* Canvas size is set per asset; the store wants several. */
-      body {
+      /* Canvas size is set per asset; the store wants several. Written as
+         html:root to outrank the popup stylesheet, which pins html and body
+         to the popup's own 360x560 frame. */
+      html:root,
+      html:root body {
         width: var(--w, 1280px);
         height: var(--h, 800px);
         overflow: hidden;
@@ -75,6 +78,8 @@
 
       .stage .popup-frame {
         border-radius: 14px; overflow: hidden; flex: none;
+        /* The popup's real frame; it fills whatever box it is mounted in. */
+        width: 360px; height: 560px;
         /* Bounded by the row it sits in, not by a fixed number. At 500px it
            was taller than the space the copy left it, and being centred it
            overflowed both ways at once — printing the frame over the subhead
